@@ -183,25 +183,58 @@ async function prune(args: Args): Promise<void> {
   });
   console.log(`\n正規化対象（《》剥がし）: ${bracketed.length} 件`);
   let normalized = 0;
+  let removedSeed = 0;
   for (const c of bracketed) {
     const next = stripBrackets(c.name);
     if (next === c.name || next.length === 0) continue;
-    console.log(`  ${c.name} → ${next}`);
-    if (!dry) {
-      try {
+
+    // 剥がした名前が既存カードと衝突する場合の扱い。
+    const clash = await prisma.card.findUnique({
+      where: { name: next },
+      select: { id: true, sourceUrl: true },
+    });
+
+    // dmwiki 同士の同名衝突（別URL）は安全側でスキップ。
+    if (clash && !clash.sourceUrl.startsWith("seed://")) {
+      logger.warn(`正規化スキップ（同名衝突） "${c.name}" → "${next}"`);
+      continue;
+    }
+
+    const isSeedClash = clash !== null; // ここまで来た clash は必ず seed:// 由来。
+    console.log(
+      isSeedClash
+        ? `  ${c.name} → ${next}（seed重複を削除して統一）`
+        : `  ${c.name} → ${next}`,
+    );
+    if (dry) continue;
+
+    try {
+      if (isSeedClash) {
+        // seed のサンプルより dmwiki の正確なデータを優先。delete と update を
+        // 同一トランザクションにし、両方成功した時だけ確定させる（途中失敗で
+        // seed だけ消えて《》付きが残る事故を防ぐ）。
+        await prisma.$transaction([
+          prisma.card.delete({ where: { id: clash!.id } }),
+          prisma.card.update({ where: { id: c.id }, data: { name: next } }),
+        ]);
+        removedSeed++;
+      } else {
         await prisma.card.update({ where: { id: c.id }, data: { name: next } });
-        normalized++;
-      } catch (err) {
-        // A name collision (e.g. seed already holds the stripped name).
-        logger.warn(
-          `正規化スキップ "${c.name}" → "${next}": ${
-            err instanceof Error ? err.message : err
-          }`,
-        );
       }
+      normalized++;
+    } catch (err) {
+      logger.warn(
+        `正規化スキップ "${c.name}" → "${next}": ${
+          err instanceof Error ? err.message : err
+        }`,
+      );
     }
   }
-  if (!dry) console.log(`→ ${normalized} 件を正規化しました`);
+  if (!dry) {
+    console.log(
+      `→ ${normalized} 件を正規化しました（うち seed 重複 ${removedSeed} 件を削除）`,
+    );
+  }
 }
 
 async function main(): Promise<void> {
