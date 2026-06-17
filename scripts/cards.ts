@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { prisma, disconnectPrisma } from "../src/db/prisma.js";
 import { logger } from "../src/utils/logger.js";
-import { stripBrackets } from "../src/crawler/parser.js";
+import { stripBrackets, sourceUrlIsCardPage } from "../src/crawler/parser.js";
 
 /**
  * Inspects cards already imported into the DB (via `npm run seed` / `npm run crawl`).
@@ -148,32 +148,30 @@ async function showList(args: Args): Promise<void> {
  * real cards' names by stripping their 《》 brackets.
  *
  * Targets only crawler rows (sourceUrl https://dmwiki.net/…). Seed cards use
- * `seed://` URLs and are legitimately bracket-free, so they are never pruned.
+ * `seed://` URLs and are never touched.
  *
- * Order matters: the bad rows are identified by *lacking* a 《 prefix, so we
- * must delete them before stripping brackets off the genuine cards.
+ * The bad rows are identified from their sourceUrl (card pages carry 《…》 in
+ * the URL path), NOT from the stored name. This stays correct even after the
+ * stored name has had its 《》 stripped, so `--prune` is safe to re-run.
  */
 async function prune(args: Args): Promise<void> {
   const dry = args.dryRun;
   console.log(dry ? "[dry-run] 変更は行いません\n" : "");
 
-  // 1) crawl由来 かつ 名前が《で始まらない＝非カードページ を削除。
-  //    seed:// の正規カード（《》無し）は対象外。
-  const badWhere: Prisma.CardWhereInput = {
-    AND: [
-      { NOT: { name: { startsWith: "《" } } },
-      { sourceUrl: { startsWith: "https://dmwiki.net" } },
-    ],
-  };
-  const bad = await prisma.card.findMany({
-    where: badWhere,
+  // 1) crawl由来 かつ URLが非カードページ（《》を含まない）を削除。
+  //    判定はsourceUrl由来なので保存名の《》剥がし後も再実行で安全。
+  const dmwikiCards = await prisma.card.findMany({
+    where: { sourceUrl: { startsWith: "https://dmwiki.net" } },
     orderBy: { name: "asc" },
-    select: { name: true },
+    select: { id: true, name: true, sourceUrl: true },
   });
+  const bad = dmwikiCards.filter((c) => !sourceUrlIsCardPage(c.sourceUrl));
   console.log(`削除対象（非カード）: ${bad.length} 件`);
   for (const c of bad) console.log(`  - ${c.name}`);
   if (!dry && bad.length > 0) {
-    const { count } = await prisma.card.deleteMany({ where: badWhere });
+    const { count } = await prisma.card.deleteMany({
+      where: { id: { in: bad.map((c) => c.id) } },
+    });
     console.log(`→ ${count} 件削除しました`);
   }
 

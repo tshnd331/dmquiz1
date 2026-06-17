@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseCardPage } from "../src/crawler/parser.js";
+import {
+  parseCardPage,
+  hasBracketCardName,
+  sourceUrlIsCardPage,
+} from "../src/crawler/parser.js";
 
 /** Minimal HTML resembling a dmwiki page: a heading plus a content body. */
 function page(heading: string, body: string): string {
@@ -59,4 +63,21 @@ test("ツインパクト風の《A》／《B》名もカードとして通る", 
   const parsed = parseCardPage(html, "fallback");
   assert.notEqual(parsed, null);
   assert.equal(parsed?.name, "ガイアール・カイザー／熱血星龍 ガイギンガ");
+});
+
+test("hasBracketCardName は先頭《…》ペアのみ true", () => {
+  assert.equal(hasBracketCardName("《アクアン》"), true);
+  assert.equal(hasBracketCardName("cip"), false);
+  assert.equal(hasBracketCardName("DMPP-01"), false);
+  // たまたま途中に《があるだけ、》が無い等は false。
+  assert.equal(hasBracketCardName("解説《補足"), false);
+});
+
+test("sourceUrlIsCardPage は URL の《》有無でカードページ判定（保存名に非依存）", () => {
+  const cardUrl = `https://dmwiki.net/${encodeURIComponent("《アクアン》")}`;
+  assert.equal(sourceUrlIsCardPage(cardUrl), true);
+  assert.equal(sourceUrlIsCardPage("https://dmwiki.net/DMPP-01"), false);
+  assert.equal(sourceUrlIsCardPage("https://dmwiki.net/cip"), false);
+  // seed カードは dmwiki 由来でないので prune 対象外（ここでも false）。
+  assert.equal(sourceUrlIsCardPage("seed://aqua-hulcus"), false);
 });

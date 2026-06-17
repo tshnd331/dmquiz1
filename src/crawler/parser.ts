@@ -174,7 +174,22 @@ export function parseCardPage(
 
 /** True when a cleaned page title is in 《…》 card-name form. */
 export function hasBracketCardName(title: string): boolean {
-  return title.includes("《");
+  return /^《.*》/.test(title);
+}
+
+/**
+ * True when a stored sourceUrl points at a real dmwiki card page. dmwiki
+ * titles its card pages 《…》, so the (URL-encoded) brackets survive in the
+ * path; non-card pages (DMPP-01, cip, …) have no brackets. This is derived
+ * from the URL, not the stored name, so it stays correct even after the
+ * stored name has had its 《》 stripped — making `--prune` safe to re-run.
+ */
+export function sourceUrlIsCardPage(sourceUrl: string): boolean {
+  try {
+    return decodeURIComponent(new URL(sourceUrl).pathname).includes("《");
+  } catch {
+    return false;
+  }
 }
 
 /**
