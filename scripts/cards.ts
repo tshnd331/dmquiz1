@@ -70,9 +70,9 @@ function printGroup(
 
 async function showSummary(): Promise<void> {
   const total = await prisma.card.count();
-  logger.info(`取り込み済みカード総数: ${total} 件`);
+  console.log(`取り込み済みカード総数: ${total} 件`);
   if (total === 0) {
-    logger.info(
+    console.log(
       "カードがありません。`npm run seed` でサンプル投入するか、`npm run crawl` で取得してください。",
     );
     return;
@@ -117,7 +117,7 @@ async function showList(args: Args): Promise<void> {
   });
 
   const label = args.filter ? `「${args.filter}」に一致するカード` : "カード";
-  logger.info(`${label}: ${total} 件（先頭 ${cards.length} 件を表示）`);
+  console.log(`${label}: ${total} 件（先頭 ${cards.length} 件を表示）`);
   if (cards.length === 0) return;
 
   console.log("");
