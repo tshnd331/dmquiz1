@@ -1,0 +1,17 @@
+services:
+  bot:
+    build: .
+    image: dmquiz1
+    env_file:
+      - .env
+    environment:
+      # Override the SQLite path onto the persisted volume so the DB
+      # survives restarts without hiding prisma/ (schema + migrations).
+      DATABASE_URL: "file:/app/data/dev.db"
+    volumes:
+      - dmquiz-data:/app/data
+    restart: unless-stopped
+    # No ports: the bot connects out to Discord over WebSocket.
+
+volumes:
+  dmquiz-data:

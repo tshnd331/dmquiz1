@@ -1,0 +1,43 @@
+// Prisma schema for the Duel Masters quiz bot.
+// Datasource is SQLite for local development (see DATABASE_URL).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/// A single Duel Masters card scraped from dmwiki.net.
+/// Structured fields are best-effort; `rawText` is always preserved.
+model Card {
+  id           Int      @id @default(autoincrement())
+  name         String   @unique
+  civilization String?
+  cost         Int?
+  cardType     String?
+  race         String?
+  power        String? // kept as String because values like "+99999" / "∞" exist
+  text         String?
+  sourceUrl    String   @unique
+  rawText      String
+  fetchedAt    DateTime @default(now())
+
+  @@index([civilization])
+  @@index([cardType])
+}
+
+/// Tracks crawl progress so the batch can resume, skip done URLs,
+/// and retry failures. `force` resets a target back to "pending".
+model CrawlTarget {
+  id        Int      @id @default(autoincrement())
+  url       String   @unique
+  type      String // "expansion" | "card"
+  status    String   @default("pending") // pending | done | failed
+  attempts  Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@index([type, status])
+}
