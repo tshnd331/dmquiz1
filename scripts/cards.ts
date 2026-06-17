@@ -193,34 +193,41 @@ async function prune(args: Args): Promise<void> {
       where: { name: next },
       select: { id: true, sourceUrl: true },
     });
-    if (clash) {
-      if (clash.sourceUrl.startsWith("seed://")) {
-        // seed のサンプルより dmwiki の正確なデータを優先。seed版を退ける。
-        console.log(`  ${c.name} → ${next}（seed重複を削除して統一）`);
-        if (!dry) {
-          await prisma.card.delete({ where: { id: clash.id } });
-          removedSeed++;
-        }
-      } else {
-        // dmwiki 同士の同名衝突（別URL）。安全側でスキップ。
-        logger.warn(`正規化スキップ（同名衝突） "${c.name}" → "${next}"`);
-        continue;
-      }
-    } else {
-      console.log(`  ${c.name} → ${next}`);
+
+    // dmwiki 同士の同名衝突（別URL）は安全側でスキップ。
+    if (clash && !clash.sourceUrl.startsWith("seed://")) {
+      logger.warn(`正規化スキップ（同名衝突） "${c.name}" → "${next}"`);
+      continue;
     }
 
-    if (!dry) {
-      try {
+    const isSeedClash = clash !== null; // ここまで来た clash は必ず seed:// 由来。
+    console.log(
+      isSeedClash
+        ? `  ${c.name} → ${next}（seed重複を削除して統一）`
+        : `  ${c.name} → ${next}`,
+    );
+    if (dry) continue;
+
+    try {
+      if (isSeedClash) {
+        // seed のサンプルより dmwiki の正確なデータを優先。delete と update を
+        // 同一トランザクションにし、両方成功した時だけ確定させる（途中失敗で
+        // seed だけ消えて《》付きが残る事故を防ぐ）。
+        await prisma.$transaction([
+          prisma.card.delete({ where: { id: clash!.id } }),
+          prisma.card.update({ where: { id: c.id }, data: { name: next } }),
+        ]);
+        removedSeed++;
+      } else {
         await prisma.card.update({ where: { id: c.id }, data: { name: next } });
-        normalized++;
-      } catch (err) {
-        logger.warn(
-          `正規化スキップ "${c.name}" → "${next}": ${
-            err instanceof Error ? err.message : err
-          }`,
-        );
       }
+      normalized++;
+    } catch (err) {
+      logger.warn(
+        `正規化スキップ "${c.name}" → "${next}": ${
+          err instanceof Error ? err.message : err
+        }`,
+      );
     }
   }
   if (!dry) {
