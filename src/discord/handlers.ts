@@ -107,7 +107,6 @@ async function handleAsk(
     [
       `❓ **質問:** ${truncate(question, 200)}`,
       `💬 **回答:** ${label}`,
-      result.reason ? `> ${truncate(result.reason, 200)}` : "",
       "",
       `（質問 ${reg.questionCount}/${MAX_QUESTIONS}・回答権 ${reg.answerCredits}）`,
     ]
