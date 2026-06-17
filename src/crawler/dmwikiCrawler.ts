@@ -158,6 +158,7 @@ export async function crawl(options: CrawlOptions): Promise<void> {
 
   let saved = 0;
   let skipped = 0;
+  let nonCard = 0;
   for (const target of cardTargets) {
     if (saved >= maxCards) {
       logger.info(
@@ -185,13 +186,19 @@ export async function crawl(options: CrawlOptions): Promise<void> {
 
     const fallbackName = decodeTitleFromUrl(target.url);
     const parsed = parseCardPage(html, fallbackName);
+    if (!parsed) {
+      // Not a card page (expansion index, keyword glossary, set code, etc.).
+      await markTarget(target.url, "done");
+      nonCard++;
+      continue;
+    }
     await saveCard(parsed, target.url);
     await markTarget(target.url, "done");
     saved++;
   }
 
   logger.info(
-    `Crawl finished. cards saved=${saved}, skipped(existing)=${skipped}.`,
+    `Crawl finished. cards saved=${saved}, skipped(existing)=${skipped}, nonCard skipped=${nonCard}.`,
   );
 }
 

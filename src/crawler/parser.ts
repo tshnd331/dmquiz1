@@ -116,11 +116,16 @@ function isContentLink(href: string): boolean {
 }
 
 /**
- * Best-effort parse of a single card page. The contract: `name` and
- * `rawText` are always populated; structured fields are filled when they
- * can be confidently extracted and left null otherwise.
+ * Best-effort parse of a single card page. The contract: when a card is
+ * recognised, `name` and `rawText` are always populated and structured
+ * fields are filled when they can be confidently extracted. Non-card pages
+ * (expansion indexes, keyword glossary entries like "cip", set codes such
+ * as "DMPP-01") return `null` so the caller can skip them.
  */
-export function parseCardPage(html: string, fallbackName: string): ParsedCard {
+export function parseCardPage(
+  html: string,
+  fallbackName: string,
+): ParsedCard | null {
   const $ = cheerio.load(html);
 
   const rawTitle =
@@ -129,7 +134,10 @@ export function parseCardPage(html: string, fallbackName: string): ParsedCard {
     $("title").text().trim() ||
     $("h1").first().text().trim() ||
     fallbackName;
-  const name = cleanCardName(rawTitle) || fallbackName;
+  // Keep the brackets here: the card/non-card decision is made on the
+  // pre-stripped title (real card pages are titled 《…》).
+  const titleNoSuffix = cleanCardName(rawTitle);
+  const hasBracket = hasBracketCardName(titleNoSuffix);
 
   const content = $(
     "#body, #mw-content-text, .mw-parser-output, #content",
@@ -147,6 +155,11 @@ export function parseCardPage(html: string, fallbackName: string): ParsedCard {
   const power = extractPower(rawText);
   const text = extractAbilityText(scope, $);
 
+  if (!isCardPage(hasBracket, civilization, cardType)) return null;
+
+  // Strip the 《》 for storage so names line up with the seed data.
+  const name = stripBrackets(titleNoSuffix) || fallbackName;
+
   return {
     name,
     civilization,
@@ -157,6 +170,24 @@ export function parseCardPage(html: string, fallbackName: string): ParsedCard {
     text,
     rawText: truncate(rawText, 20000),
   };
+}
+
+/** True when a cleaned page title is in 《…》 card-name form. */
+export function hasBracketCardName(title: string): boolean {
+  return title.includes("《");
+}
+
+/**
+ * Decide whether a page is an actual card. Real dmwiki card pages are
+ * titled 《…》 and render a stat block, so we require the bracketed name
+ * plus at least one confidently-extracted stat (civilization or type).
+ */
+export function isCardPage(
+  hasBracket: boolean,
+  civilization: string | null,
+  cardType: string | null,
+): boolean {
+  return hasBracket && (civilization !== null || cardType !== null);
 }
 
 // --- field extractors (best effort) -------------------------------------
@@ -228,6 +259,11 @@ function cleanCardName(title: string): string {
     .replace(/\s*[-–—]\s*Duel\s*Masters\s*Wiki\s*$/i, "")
     .replace(/\s*\[編集\]\s*/g, "")
     .trim();
+}
+
+/** Remove 《》 brackets from a card name (storage form matches seed data). */
+export function stripBrackets(name: string): string {
+  return name.replace(/[《》]/g, "").trim();
 }
 
 function collapseWhitespace(s: string): string {
