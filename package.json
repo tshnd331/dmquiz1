@@ -15,7 +15,8 @@
     "prisma:generate": "prisma generate",
     "crawl": "tsx scripts/crawlDmwiki.ts",
     "deploy-commands": "tsx scripts/deployCommands.ts",
-    "seed": "tsx scripts/seed.ts"
+    "seed": "tsx scripts/seed.ts",
+    "cards": "tsx scripts/cards.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.2.1",
