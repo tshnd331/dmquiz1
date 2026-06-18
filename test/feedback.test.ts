@@ -47,6 +47,29 @@ test("理由が無い場合は「（記載なし）」になる", () => {
   assert.match(body, /\(記載なし\)|（記載なし）/);
 });
 
+test("タイトルは改行を畳み単一行にし、@mention を無害化する", () => {
+  const title = buildFeedbackIssueTitle(
+    sampleFeedback({ question: "1行目\n2行目\t@everyone   末尾" }),
+    "カード",
+  );
+  assert.ok(!/\n/.test(title), "タイトルに改行が残らない");
+  assert.ok(!/(^|[^​])@everyone/.test(title), "@mention が素のまま残らない");
+  assert.match(title, /1行目 2行目/); // 連続空白が単一化されている
+});
+
+test("本文はユーザー入力を fenced code block 化し、内部の ``` で脱出されない", () => {
+  const evil = "```\n## 偽セクション\n@everyone";
+  const body = buildFeedbackIssueBody(
+    sampleFeedback({ question: evil, reason: "理由に```入り @here" }),
+    "カード",
+  );
+  // 入力中の ``` より長いフェンスで囲まれている（4連以上のバッククォートが登場）
+  assert.match(body, /````/);
+  // mention は無害化済（素の @everyone / @here が残らない）
+  assert.ok(!/(^|[^​])@everyone/.test(body));
+  assert.ok(!/(^|[^​])@here/.test(body));
+});
+
 test("問題文は対象ファイルと Closes 参照を含む", () => {
   const stmt = generateProblemStatementFromIssue({
     number: 7,

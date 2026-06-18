@@ -19,9 +19,37 @@ function label(answer: string | null | undefined): string {
   return ANSWER_LABEL[answer] ?? answer;
 }
 
+/** Zero-width space; breaks `@mention` / `#issue` auto-links without changing the visible text. */
+const ZWSP = "​";
+
+/** Neutralise `@` so GitHub does not turn user input into mention notifications. */
+function defuseMentions(s: string): string {
+  return s.replace(/@/g, `@${ZWSP}`);
+}
+
+/**
+ * Collapse all whitespace (incl. newlines) into single spaces and defuse
+ * mentions, for use in a single-line context like the Issue title.
+ */
+function sanitizeTitlePart(s: string): string {
+  return defuseMentions(s.replace(/\s+/g, " ").trim());
+}
+
+/**
+ * Wrap untrusted user input in a fenced code block that cannot be broken out
+ * of: the fence length always exceeds the longest backtick run inside, and
+ * mentions are defused so the body never emits stray notifications.
+ */
+function fencedBlock(s: string): string {
+  const longestRun = (s.match(/`+/g) ?? []).reduce((m, r) => Math.max(m, r.length), 0);
+  const fence = "`".repeat(Math.max(3, longestRun + 1));
+  return `${fence}\n${defuseMentions(s)}\n${fence}`;
+}
+
 /** Short, human-readable Issue title for a feedback item. */
 export function buildFeedbackIssueTitle(fb: QuestionFeedback, cardName: string): string {
-  const q = fb.question.length > 60 ? fb.question.slice(0, 59) + "…" : fb.question;
+  const clean = sanitizeTitlePart(fb.question);
+  const q = clean.length > 60 ? clean.slice(0, 59) + "…" : clean;
   return `[feedback] ${cardName}: ${q}`;
 }
 
@@ -31,7 +59,7 @@ export function buildFeedbackIssueBody(fb: QuestionFeedback, cardName: string): 
     "## 📝 ユーザーフィードバック（管理者承認済み）",
     "",
     "**質問内容:**",
-    `\`${fb.question}\``,
+    fencedBlock(fb.question),
     "",
     `**カード名:** ${cardName}`,
     "",
@@ -40,7 +68,7 @@ export function buildFeedbackIssueBody(fb: QuestionFeedback, cardName: string): 
     `**正解:** ${label(fb.userCorrectAnswer)}`,
     "",
     "**理由:**",
-    fb.reason ?? "（記載なし）",
+    fb.reason ? fencedBlock(fb.reason) : "（記載なし）",
     "",
     `**ユーザー ID:** ${fb.userId}`,
     "",

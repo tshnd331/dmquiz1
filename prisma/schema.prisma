@@ -44,7 +44,7 @@ model QuestionFeedback {
   reason            String?
   userId            String
 
-  status      String @default("pending") // "pending" | "approved" | "rejected"
+  status      String @default("pending") // "pending" | "processing" | "approved" | "rejected"
   issueNumber Int? // GitHub Issue number created after approval
 
   createdAt DateTime @default(now())

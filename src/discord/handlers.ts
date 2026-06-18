@@ -303,6 +303,16 @@ export async function handleButtonInteraction(
 ): Promise<void> {
   if (!interaction.customId.startsWith(FEEDBACK_BUTTON_PREFIX)) return;
 
+  // Only process feedback buttons in the configured admin channel; a button
+  // copied/reposted elsewhere must not be actionable.
+  if (!config.adminChannelId || interaction.channelId !== config.adminChannelId) {
+    await interaction.reply({
+      content: "このボタンは管理者チャンネルでのみ操作できます。",
+      ephemeral: true,
+    });
+    return;
+  }
+
   try {
     const [action, idStr] = interaction.customId.split(":");
     const feedbackId = Number(idStr);
@@ -311,31 +321,16 @@ export async function handleButtonInteraction(
       return;
     }
 
-    const fb = await prisma.questionFeedback.findUnique({
-      where: { id: feedbackId },
-      include: { card: true },
-    });
-    if (!fb) {
-      await interaction.update({
-        content: "対象のフィードバックが見つかりません。",
-        components: [],
-      });
-      return;
-    }
-
-    if (fb.status !== "pending") {
-      await interaction.reply({
-        content: `このフィードバックは既に「${fb.status}」で処理済みです。`,
-        ephemeral: true,
-      });
-      return;
-    }
-
     if (action === "fb_reject") {
-      await prisma.questionFeedback.update({
-        where: { id: feedbackId },
+      // Atomically claim the pending row so a concurrent press can't also act.
+      const claim = await prisma.questionFeedback.updateMany({
+        where: { id: feedbackId, status: "pending" },
         data: { status: "rejected" },
       });
+      if (claim.count !== 1) {
+        await reportNotClaimable(interaction, feedbackId);
+        return;
+      }
       const embed = EmbedBuilder.from(interaction.message.embeds[0]).setColor(0x95a5a6);
       await interaction.update({
         content: "❌ 却下（修正しない）",
@@ -353,15 +348,50 @@ export async function handleButtonInteraction(
         });
         return;
       }
+
+      // Atomically claim pending → processing so simultaneous approvals by
+      // multiple admins can't create duplicate Issues. Only the winner (count
+      // === 1) proceeds to the GitHub API call.
+      const claim = await prisma.questionFeedback.updateMany({
+        where: { id: feedbackId, status: "pending" },
+        data: { status: "processing" },
+      });
+      if (claim.count !== 1) {
+        await reportNotClaimable(interaction, feedbackId);
+        return;
+      }
+
+      const fb = await prisma.questionFeedback.findUnique({
+        where: { id: feedbackId },
+        include: { card: true },
+      });
+      if (!fb) {
+        // Should not happen (we just claimed it), but stay defensive.
+        await interaction.reply({
+          content: "対象のフィードバックが見つかりません。",
+          ephemeral: true,
+        });
+        return;
+      }
+
       // ACK within 3s before the GitHub API call, which can exceed the
       // interaction timeout; finalize the message with editReply afterwards.
       await interaction.deferUpdate();
-      const issueNumber = await createFeedbackIssue({
-        repo: config.githubRepo,
-        token: config.githubToken,
-        title: buildFeedbackIssueTitle(fb, fb.card.name),
-        body: buildFeedbackIssueBody(fb, fb.card.name),
-      });
+      let issueNumber: number;
+      try {
+        issueNumber = await createFeedbackIssue({
+          repo: config.githubRepo,
+          token: config.githubToken,
+          title: buildFeedbackIssueTitle(fb, fb.card.name),
+          body: buildFeedbackIssueBody(fb, fb.card.name),
+        });
+      } catch (err) {
+        // Release the claim so the approval can be retried.
+        await prisma.questionFeedback
+          .update({ where: { id: feedbackId }, data: { status: "pending" } })
+          .catch(() => {});
+        throw err;
+      }
       await prisma.questionFeedback.update({
         where: { id: feedbackId },
         data: { status: "approved", issueNumber },
@@ -393,6 +423,21 @@ export async function handleButtonInteraction(
 }
 
 // --- helpers ------------------------------------------------------------
+
+/**
+ * Tell the admin the feedback could not be claimed (already processed, being
+ * processed by another admin, or gone), reading the latest status from the DB.
+ */
+async function reportNotClaimable(
+  interaction: ButtonInteraction,
+  feedbackId: number,
+): Promise<void> {
+  const fb = await prisma.questionFeedback.findUnique({ where: { id: feedbackId } });
+  const content = fb
+    ? `このフィードバックは既に「${fb.status}」のため操作できません。`
+    : "対象のフィードバックが見つかりません。";
+  await interaction.reply({ content, ephemeral: true });
+}
 
 function buildFeedbackEmbed(
   fb: { question: string; botAnswer: string; userCorrectAnswer: string | null; reason: string | null },

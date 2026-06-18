@@ -22,7 +22,8 @@
 
 services:
   runner:
-    image: myoung34/github-runner:latest
+    # Pinned for reproducibility; bump manually after vetting a new release.
+    image: myoung34/github-runner:2.335.1
     env_file:
       - runner.env
     environment:
