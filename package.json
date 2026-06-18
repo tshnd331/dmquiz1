@@ -17,7 +17,7 @@
     "deploy-commands": "tsx scripts/deployCommands.ts",
     "seed": "tsx scripts/seed.ts",
     "cards": "tsx scripts/cards.ts",
-    "test": "tsx --test test/**/*.test.ts"
+    "test": "tsx --test test/*.test.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.2.1",
