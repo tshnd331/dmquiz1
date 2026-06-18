@@ -3,7 +3,7 @@ import { requireBotConfig, hasClaudeApiKey } from "./config.js";
 import { QuizManager } from "./quiz/QuizManager.js";
 import { RuleBasedQuestionAnswerer } from "./quiz/RuleBasedQuestionAnswerer.js";
 import type { QuestionAnswerer } from "./quiz/QuestionAnswerer.js";
-import { handleInteraction } from "./discord/handlers.js";
+import { handleInteraction, handleButtonInteraction } from "./discord/handlers.js";
 import { disconnectPrisma } from "./db/prisma.js";
 import { logger } from "./utils/logger.js";
 
@@ -28,8 +28,11 @@ async function main() {
   });
 
   client.on(Events.InteractionCreate, async (interaction) => {
-    if (!interaction.isChatInputCommand()) return;
-    await handleInteraction(interaction, manager);
+    if (interaction.isChatInputCommand()) {
+      await handleInteraction(interaction, manager);
+    } else if (interaction.isButton()) {
+      await handleButtonInteraction(interaction);
+    }
   });
 
   const shutdown = async (signal: string) => {

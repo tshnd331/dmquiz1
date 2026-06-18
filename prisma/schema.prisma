@@ -25,8 +25,51 @@ model Card {
   rawText      String
   fetchedAt    DateTime @default(now())
 
+  feedback QuestionFeedback[]
+
   @@index([civilization])
   @@index([cardType])
+}
+
+/// User feedback on a bot answer, gated by an admin approval step.
+/// status flows pending -> approved (GitHub Issue created) | rejected.
+model QuestionFeedback {
+  id     Int  @id @default(autoincrement())
+  cardId Int
+  card   Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  question          String
+  botAnswer         String // "yes" | "no" | "unknown"
+  userCorrectAnswer String?
+  reason            String?
+  userId            String
+
+  status      String @default("pending") // "pending" | "approved" | "rejected"
+  issueNumber Int? // GitHub Issue number created after approval
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([cardId])
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+/// Aggregated accuracy stats per question pattern / rule category,
+/// used to prioritise which answer rules to improve.
+model FeedbackStats {
+  id              Int    @id @default(autoincrement())
+  questionPattern String
+  ruleCategory    String // "civilization" | "cost" | "power" | "race" | "cardType"
+
+  totalFeedback  Int   @default(0)
+  incorrectCount Int   @default(0)
+  accuracy       Float // 0.0 ~ 1.0
+
+  lastUpdated DateTime @updatedAt
+
+  @@unique([questionPattern, ruleCategory])
 }
 
 /// Tracks crawl progress so the batch can resume, skip done URLs,

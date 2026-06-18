@@ -33,4 +33,27 @@ export const commands = [
   new SlashCommandBuilder()
     .setName("dmquiz_giveup")
     .setDescription("ギブアップして答えを表示します"),
+
+  new SlashCommandBuilder()
+    .setName("dmquiz_feedback")
+    .setDescription("進行中クイズのBot回答が誤っていた場合に報告します（管理者確認後に対応）")
+    .addStringOption((opt) =>
+      opt
+        .setName("question")
+        .setDescription("Botの回答が誤っていた質問")
+        .setRequired(true),
+    )
+    .addStringOption((opt) =>
+      opt
+        .setName("correct_answer")
+        .setDescription("本来の正しい答え")
+        .setRequired(true)
+        .addChoices(
+          { name: "はい", value: "yes" },
+          { name: "いいえ", value: "no" },
+        ),
+    )
+    .addStringOption((opt) =>
+      opt.setName("reason").setDescription("補足・理由（任意）").setRequired(false),
+    ),
 ].map((c) => c.toJSON());

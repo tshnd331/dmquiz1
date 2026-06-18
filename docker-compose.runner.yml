@@ -1,0 +1,36 @@
+# Self-hosted GitHub Actions runner, containerised.
+#
+# Kept in a SEPARATE compose file from the bot (docker-compose.yml) so that
+# `auto-deploy.yml`'s `docker compose up -d bot` never recreates the runner.
+#
+# Docker-out-of-Docker: the host's docker socket is mounted in, so the
+# `docker compose` commands run by the deploy job control the HOST daemon
+# (and reach the bot's `dmquiz-data` named volume). The socket mount grants
+# the runner root-equivalent control of host Docker — acceptable on the
+# dedicated IDCF server; see docs/AUTOMATION_SETUP.md.
+#
+# Usage on the server:
+#   1. Create runner.env (see below).
+#   2. docker compose -f docker-compose.runner.yml up -d
+#
+# runner.env:
+#   REPO_URL=https://github.com/tshnd331/dmquiz1
+#   ACCESS_TOKEN=ghp_xxx        # PAT with repo scope (registers the runner)
+#   RUNNER_NAME=idcf-runner
+#   LABELS=self-hosted
+#   RUNNER_SCOPE=repo
+
+services:
+  runner:
+    image: myoung34/github-runner:latest
+    env_file:
+      - runner.env
+    environment:
+      EPHEMERAL: "false"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - runner-work:/_work
+    restart: unless-stopped
+
+volumes:
+  runner-work:

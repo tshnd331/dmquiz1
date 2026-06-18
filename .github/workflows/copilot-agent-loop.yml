@@ -1,0 +1,60 @@
+name: copilot-agent-loop
+
+# Poll approved feedback Issues every 5 minutes and hand each off to the
+# configured fix agent (Copilot coding agent by default). Human gate #1
+# (admin approval) already happened in Discord; this only acts on Issues
+# that already carry both `feedback` and `approved` labels.
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  contents: read
+
+concurrency:
+  group: copilot-agent-loop
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    env:
+      # A PAT is usually required to assign the Copilot coding agent.
+      # Falls back to the default token (sufficient for labelling).
+      GH_TOKEN: ${{ secrets.AUTOMATION_TOKEN || github.token }}
+      FIX_AGENT: ${{ vars.FIX_AGENT || 'copilot' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Find approved Issues without in-progress
+        id: find
+        run: |
+          issues=$(gh issue list \
+            --label feedback --label approved \
+            --state open --json number,labels \
+            --jq '[.[] | select((.labels | map(.name) | index("in-progress")) | not) | .number]')
+          echo "issues=$issues" >> "$GITHUB_OUTPUT"
+          echo "Detected: $issues"
+
+      - name: Trigger fix agent per Issue
+        if: steps.find.outputs.issues != '[]'
+        env:
+          GITHUB_TOKEN: ${{ secrets.AUTOMATION_TOKEN || github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          for num in $(echo '${{ steps.find.outputs.issues }}' | jq -r '.[]'); do
+            echo "::group::Issue #$num"
+            gh issue edit "$num" --add-label in-progress
+            ISSUE_NUMBER="$num" npx tsx scripts/triggerFixAgent.ts
+            echo "::endgroup::"
+          done

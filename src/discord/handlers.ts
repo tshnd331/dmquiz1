@@ -1,4 +1,12 @@
-import type { ChatInputCommandInteraction } from "discord.js";
+import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  EmbedBuilder,
+  type ButtonInteraction,
+  type ChatInputCommandInteraction,
+  type SendableChannels,
+} from "discord.js";
 import type { QuizManager } from "../quiz/QuizManager.js";
 import {
   MAX_QUESTIONS,
@@ -6,6 +14,13 @@ import {
   type QuizSession,
 } from "../quiz/QuizSession.js";
 import { logger } from "../utils/logger.js";
+import { config } from "../config.js";
+import { prisma } from "../db/prisma.js";
+import {
+  buildFeedbackIssueBody,
+  buildFeedbackIssueTitle,
+  createFeedbackIssue,
+} from "../github/issues.js";
 
 const ANSWER_LABEL: Record<string, string> = {
   yes: "はい",
@@ -31,6 +46,8 @@ export async function handleInteraction(
         return await handleStatus(interaction, manager, channelId);
       case "dmquiz_giveup":
         return await handleGiveup(interaction, manager, channelId);
+      case "dmquiz_feedback":
+        return await handleFeedback(interaction, manager, channelId);
       default:
         await interaction.reply({ content: "未知のコマンドです。", ephemeral: true });
     }
@@ -210,7 +227,195 @@ async function handleGiveup(
   );
 }
 
+const FEEDBACK_BUTTON_PREFIX = "fb_";
+
+async function handleFeedback(
+  interaction: ChatInputCommandInteraction,
+  manager: QuizManager,
+  channelId: string,
+): Promise<void> {
+  const session = manager.get(channelId);
+  if (!session) {
+    await interaction.reply({
+      content:
+        "フィードバックは進行中のクイズに対してのみ送れます。`/dmquiz_start` で開始後にご利用ください。",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  if (!config.adminChannelId || !config.githubToken) {
+    logger.warn(
+      "Feedback received but ADMIN_CHANNEL_ID or GITHUB_TOKEN is not configured.",
+    );
+    await interaction.reply({
+      content: "フィードバック機能は管理者により未設定です。受付できませんでした。",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const question = interaction.options.getString("question", true);
+  const userCorrectAnswer = interaction.options.getString("correct_answer", true);
+  const reason = interaction.options.getString("reason", false);
+
+  await interaction.deferReply({ ephemeral: true });
+
+  // Re-run the answerer to capture what the bot would have answered.
+  const botResult = await manager.answerQuestion(session, question);
+
+  const fb = await prisma.questionFeedback.create({
+    data: {
+      cardId: session.card.id,
+      question,
+      botAnswer: botResult.answer,
+      userCorrectAnswer,
+      reason: reason ?? null,
+      userId: interaction.user.id,
+      status: "pending",
+    },
+  });
+
+  // Post the admin approval embed + buttons to the admin channel.
+  const channel = await interaction.client.channels
+    .fetch(config.adminChannelId)
+    .catch(() => null);
+  if (!channel || !channel.isTextBased() || !("send" in channel)) {
+    logger.error("Admin channel not found or not sendable:", config.adminChannelId);
+    await interaction.editReply(
+      "フィードバックを保存しましたが、管理者チャンネルへの通知に失敗しました。",
+    );
+    return;
+  }
+
+  const embed = buildFeedbackEmbed(fb, session.card.name);
+  const row = buildFeedbackButtons(fb.id);
+  await (channel as SendableChannels).send({ embeds: [embed], components: [row] });
+
+  await interaction.editReply(
+    "✅ フィードバックありがとうございます！（管理者の確認後に対応されます）",
+  );
+}
+
+/** Route a button interaction; only feedback approve/reject is handled. */
+export async function handleButtonInteraction(
+  interaction: ButtonInteraction,
+): Promise<void> {
+  if (!interaction.customId.startsWith(FEEDBACK_BUTTON_PREFIX)) return;
+
+  try {
+    const [action, idStr] = interaction.customId.split(":");
+    const feedbackId = Number(idStr);
+    if (!Number.isInteger(feedbackId)) {
+      await interaction.reply({ content: "不正なボタンです。", ephemeral: true });
+      return;
+    }
+
+    const fb = await prisma.questionFeedback.findUnique({
+      where: { id: feedbackId },
+      include: { card: true },
+    });
+    if (!fb) {
+      await interaction.update({
+        content: "対象のフィードバックが見つかりません。",
+        components: [],
+      });
+      return;
+    }
+
+    if (fb.status !== "pending") {
+      await interaction.reply({
+        content: `このフィードバックは既に「${fb.status}」で処理済みです。`,
+        ephemeral: true,
+      });
+      return;
+    }
+
+    if (action === "fb_reject") {
+      await prisma.questionFeedback.update({
+        where: { id: feedbackId },
+        data: { status: "rejected" },
+      });
+      const embed = EmbedBuilder.from(interaction.message.embeds[0]).setColor(0x95a5a6);
+      await interaction.update({
+        content: "❌ 却下（修正しない）",
+        embeds: [embed],
+        components: [],
+      });
+      return;
+    }
+
+    if (action === "fb_approve") {
+      if (!config.githubToken) {
+        await interaction.reply({
+          content: "GITHUB_TOKEN が未設定のため Issue を作成できません。",
+          ephemeral: true,
+        });
+        return;
+      }
+      const issueNumber = await createFeedbackIssue({
+        repo: config.githubRepo,
+        token: config.githubToken,
+        title: buildFeedbackIssueTitle(fb, fb.card.name),
+        body: buildFeedbackIssueBody(fb, fb.card.name),
+      });
+      await prisma.questionFeedback.update({
+        where: { id: feedbackId },
+        data: { status: "approved", issueNumber },
+      });
+      const embed = EmbedBuilder.from(interaction.message.embeds[0]).setColor(0x2ecc71);
+      await interaction.update({
+        content: `✅ 承認済み（Issue #${issueNumber}）`,
+        embeds: [embed],
+        components: [],
+      });
+      return;
+    }
+  } catch (err) {
+    logger.error("Button interaction handler failed:", err);
+    const msg = "処理中にエラーが発生しました。";
+    if (interaction.deferred || interaction.replied) {
+      await interaction.followUp({ content: msg, ephemeral: true }).catch(() => {});
+    } else {
+      await interaction.reply({ content: msg, ephemeral: true }).catch(() => {});
+    }
+  }
+}
+
 // --- helpers ------------------------------------------------------------
+
+function buildFeedbackEmbed(
+  fb: { question: string; botAnswer: string; userCorrectAnswer: string | null; reason: string | null },
+  cardName: string,
+): EmbedBuilder {
+  return new EmbedBuilder()
+    .setTitle("📝 ユーザーフィードバック (要確認)")
+    .setColor(0xf1c40f)
+    .addFields(
+      { name: "質問", value: truncate(fb.question, 1000) },
+      { name: "カード", value: cardName, inline: true },
+      { name: "Botの回答", value: ANSWER_LABEL[fb.botAnswer] ?? fb.botAnswer, inline: true },
+      {
+        name: "正解",
+        value: ANSWER_LABEL[fb.userCorrectAnswer ?? ""] ?? fb.userCorrectAnswer ?? "（不明）",
+        inline: true,
+      },
+      { name: "理由", value: fb.reason ? truncate(fb.reason, 1000) : "（記載なし）" },
+    );
+}
+
+function buildFeedbackButtons(feedbackId: number): ActionRowBuilder<ButtonBuilder> {
+  return new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`fb_approve:${feedbackId}`)
+      .setLabel("✅ 承認（修正する）")
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId(`fb_reject:${feedbackId}`)
+      .setLabel("❌ 却下（修正しない）")
+      .setStyle(ButtonStyle.Danger),
+  );
+}
 
 function noSessionMessage(): string {
   return "このチャンネルでクイズは開始されていません。`/dmquiz_start` で開始してください。";
