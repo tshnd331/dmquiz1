@@ -35,7 +35,7 @@ async function createGitHubIssue(feedbackText: string, userId: string): Promise<
     const res = await fetch("https://api.github.com/repos/tshnd331/dmquiz1/issues", {
       method: "POST",
       headers: {
-        Authorization: "token " + token,
+        Authorization: "Bearer " + token,
         Accept: "application/vnd.github+json",
         "Content-Type": "application/json",
         "X-GitHub-Api-Version": "2022-11-28",
