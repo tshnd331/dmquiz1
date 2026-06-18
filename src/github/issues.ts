@@ -8,17 +8,6 @@ export const FEEDBACK_ISSUE_LABELS = [
   "approved",
 ];
 
-const ANSWER_LABEL: Record<string, string> = {
-  yes: "はい",
-  no: "いいえ",
-  unknown: "判断不能",
-};
-
-function label(answer: string | null | undefined): string {
-  if (!answer) return "（不明）";
-  return ANSWER_LABEL[answer] ?? answer;
-}
-
 /** Zero-width space; breaks `@mention` / `#issue` auto-links without changing the visible text. */
 const ZWSP = "​";
 
@@ -48,7 +37,7 @@ function fencedBlock(s: string): string {
 
 /** Short, human-readable Issue title for a feedback item. */
 export function buildFeedbackIssueTitle(fb: QuestionFeedback, cardName: string): string {
-  const clean = sanitizeTitlePart(fb.question);
+  const clean = sanitizeTitlePart(fb.content);
   const q = clean.length > 60 ? clean.slice(0, 59) + "…" : clean;
   return `[feedback] ${cardName}: ${q}`;
 }
@@ -58,17 +47,10 @@ export function buildFeedbackIssueBody(fb: QuestionFeedback, cardName: string): 
   return [
     "## 📝 ユーザーフィードバック（管理者承認済み）",
     "",
-    "**質問内容:**",
-    fencedBlock(fb.question),
+    "**内容:**",
+    fencedBlock(fb.content),
     "",
     `**カード名:** ${cardName}`,
-    "",
-    `**Botの回答:** ${label(fb.botAnswer)}`,
-    "",
-    `**正解:** ${label(fb.userCorrectAnswer)}`,
-    "",
-    "**理由:**",
-    fb.reason ? fencedBlock(fb.reason) : "（記載なし）",
     "",
     `**ユーザー ID:** ${fb.userId}`,
     "",

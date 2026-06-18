@@ -39,21 +39,8 @@ export const commands = [
     .setDescription("進行中クイズのBot回答が誤っていた場合に報告します（管理者確認後に対応）")
     .addStringOption((opt) =>
       opt
-        .setName("question")
-        .setDescription("Botの回答が誤っていた質問")
+        .setName("content")
+        .setDescription("どの質問でBotの回答が誤っていたか・本来の正解・理由を自由に記入")
         .setRequired(true),
-    )
-    .addStringOption((opt) =>
-      opt
-        .setName("correct_answer")
-        .setDescription("本来の正しい答え")
-        .setRequired(true)
-        .addChoices(
-          { name: "はい", value: "yes" },
-          { name: "いいえ", value: "no" },
-        ),
-    )
-    .addStringOption((opt) =>
-      opt.setName("reason").setDescription("補足・理由（任意）").setRequired(false),
     ),
 ].map((c) => c.toJSON());

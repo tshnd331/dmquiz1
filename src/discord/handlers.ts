@@ -255,22 +255,14 @@ async function handleFeedback(
     return;
   }
 
-  const question = interaction.options.getString("question", true);
-  const userCorrectAnswer = interaction.options.getString("correct_answer", true);
-  const reason = interaction.options.getString("reason", false);
+  const content = interaction.options.getString("content", true);
 
   await interaction.deferReply({ ephemeral: true });
-
-  // Re-run the answerer to capture what the bot would have answered.
-  const botResult = await manager.answerQuestion(session, question);
 
   const fb = await prisma.questionFeedback.create({
     data: {
       cardId: session.card.id,
-      question,
-      botAnswer: botResult.answer,
-      userCorrectAnswer,
-      reason: reason ?? null,
+      content,
       userId: interaction.user.id,
       status: "pending",
     },
@@ -440,22 +432,15 @@ async function reportNotClaimable(
 }
 
 function buildFeedbackEmbed(
-  fb: { question: string; botAnswer: string; userCorrectAnswer: string | null; reason: string | null },
+  fb: { content: string },
   cardName: string,
 ): EmbedBuilder {
   return new EmbedBuilder()
     .setTitle("📝 ユーザーフィードバック (要確認)")
     .setColor(0xf1c40f)
     .addFields(
-      { name: "質問", value: truncate(fb.question, 1000) },
+      { name: "内容", value: truncate(fb.content, 1000) },
       { name: "カード", value: cardName, inline: true },
-      { name: "Botの回答", value: ANSWER_LABEL[fb.botAnswer] ?? fb.botAnswer, inline: true },
-      {
-        name: "正解",
-        value: ANSWER_LABEL[fb.userCorrectAnswer ?? ""] ?? fb.userCorrectAnswer ?? "（不明）",
-        inline: true,
-      },
-      { name: "理由", value: fb.reason ? truncate(fb.reason, 1000) : "（記載なし）" },
     );
 }
 
