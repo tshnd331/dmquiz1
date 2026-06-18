@@ -62,11 +62,30 @@ PR 自動マージはしない。Settings → Branches → Add rule（`main`）:
 
 ## 4. Copilot 関連
 
-- **Copilot coding agent**: リポジトリで有効化すると Issue にアサイン可能になる。`copilot-agent-loop.yml` が approved Issue を検知して `scripts/triggerFixAgent.ts` 経由でアサインする。
-  - `FIX_AGENT=copilot` の実体は GraphQL `suggestedActors`（`CAN_BE_ASSIGNED`）→ `replaceActorsForAssignable`。仕様変更時は `scripts/triggerFixAgent.ts` の `copilotAgent` を調整。
-- **Copilot code review**: Settings / ruleset で有効化（workflow からは発火不可）。`pr-ci-and-review.yml` は CI 結果サマリのコメントのみ担当。
+Copilot には **2つの別機能**があり、それぞれ別途有効化が必要:
 
-将来 Claude 等へ切替: `scripts/triggerFixAgent.ts` の `AGENTS` に実装を追加し、`FIX_AGENT` variable を変更するだけ。
+### 4-1. Copilot coding agent（修正エンジン）
+- リポジトリで有効化すると Issue にアサイン可能（`copilot-swe-agent` bot）。`copilot-agent-loop.yml` が approved Issue を検知して `scripts/triggerFixAgent.ts` 経由でアサインする。
+- `FIX_AGENT=copilot` の実体は GraphQL `suggestedActors`（`CAN_BE_ASSIGNED`）→ `replaceActorsForAssignable`。
+- 将来 Claude 等へ切替: `scripts/triggerFixAgent.ts` の `AGENTS` に実装追加し `FIX_AGENT` variable を変更するだけ。
+
+### 4-2. Copilot code review（レビュアー）— `copilot-review.yml`
+PR 作成時とレビュー指摘対応の push 時の両方で Copilot を自動でレビュアー指定する。
+
+- **動作**: `copilot-review.yml` が `pull_request`(opened / reopened / ready_for_review / **synchronize**) で発火し、公式の `gh pr edit --add-reviewer @copilot` で Copilot をレビュアー指定。`synchronize`（push）でも発火するため、指摘対応の push 後も最新コミットがレビュー対象になる。
+- **前提: アカウント/repo で Copilot code review を有効化**（coding agent とは別機能。Copilot Pro+/Business/Enterprise 等が必要）。未有効だとレビュー依頼が定着しない（コマンド自体はエラーにならず no-op）。
+  - 確認コマンド（手動で実際に付くか試す）:
+    ```bash
+    gh pr edit <PR番号> --repo tshnd331/dmquiz1 --add-reviewer @copilot
+    gh pr view <PR番号> --json reviewRequests   # Copilot が入れば有効
+    ```
+    （現状は未有効＝reviewRequests に入らない）
+- **トークン**: 既定 `GITHUB_TOKEN` ではレビュー依頼が拒否される場合あり → `AUTOMATION_TOKEN`(PAT) 推奨。
+- **代替/併用**: PR 作成時のみで良ければ、Settings → Rules → Rulesets で「Copilot のレビューを自動リクエスト」を有効化する方法もある（push 再依頼は workflow が担当）。
+
+> 注意: REST `requested_reviewers` に `copilot-pull-request-reviewer` という名のアカウントを渡すのは誤り（無関係な第三者 org, type=Organization）。必ず `gh ... --add-reviewer @copilot`（`@` 必須。無しだと collaborator 扱いで 422）を使うこと。
+
+`pr-ci-and-review.yml` は CI 結果サマリのコメントのみ担当（レビュー依頼は `copilot-review.yml`）。
 
 ---
 

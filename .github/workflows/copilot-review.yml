@@ -1,0 +1,35 @@
+name: copilot-review
+
+# Automatically request a Copilot code review on a PR:
+#   - when the PR is opened / reopened / marked ready
+#   - on every push to the PR branch (synchronize), e.g. after addressing
+#     review comments — Copilot re-reviews the new commits.
+#
+# Uses the officially-supported `gh pr edit --add-reviewer @copilot`
+# (GitHub changelog). Requires Copilot code review to be ENABLED for the
+# repo/account; otherwise the request simply does not stick.
+# See docs/AUTOMATION_SETUP.md.
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review, synchronize]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  request-copilot:
+    # Skip drafts; Copilot reviews ready PRs.
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    env:
+      # The default GITHUB_TOKEN may not be allowed to request Copilot;
+      # a PAT (AUTOMATION_TOKEN) is recommended. Falls back to the default.
+      GH_TOKEN: ${{ secrets.AUTOMATION_TOKEN || github.token }}
+    steps:
+      - name: Request Copilot review
+        run: |
+          gh pr edit "${{ github.event.pull_request.number }}" \
+            --repo "${{ github.repository }}" \
+            --add-reviewer @copilot
