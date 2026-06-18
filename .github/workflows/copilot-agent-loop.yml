@@ -49,9 +49,15 @@ jobs:
       - name: Trigger fix agent per Issue
         if: steps.find.outputs.issues != '[]'
         env:
-          GITHUB_TOKEN: ${{ secrets.AUTOMATION_TOKEN || github.token }}
+          # Must be a Copilot-licensed user's PAT (Issues RW + Metadata R).
+          # The default GITHUB_TOKEN cannot assign Copilot.
+          GITHUB_TOKEN: ${{ secrets.AUTOMATION_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
+          if [ -z "$GITHUB_TOKEN" ]; then
+            echo "::error::AUTOMATION_TOKEN secret is required (Copilot-licensed PAT)."
+            exit 1
+          fi
           for num in $(echo '${{ steps.find.outputs.issues }}' | jq -r '.[]'); do
             echo "::group::Issue #$num"
             gh issue edit "$num" --add-label in-progress

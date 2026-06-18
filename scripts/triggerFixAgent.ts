@@ -6,16 +6,23 @@
  * by implementing the FixAgent interface and registering it in `AGENTS`.
  *
  * Env:
- *   GITHUB_TOKEN       PAT / Actions token with repo + issues write
+ *   GITHUB_TOKEN       Copilot-licensed user's PAT (Issues RW + Metadata R).
+ *                      The default Actions GITHUB_TOKEN CANNOT assign Copilot.
  *   GITHUB_REPOSITORY  "owner/name" (provided by Actions)
  *   ISSUE_NUMBER       Issue to hand to the agent
  *   FIX_AGENT          engine selector (default "copilot")
+ *
+ * Requires the `gh` CLI on PATH (present on GitHub-hosted runners).
  */
 
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import {
   generateProblemStatementFromIssue,
   type IssueLike,
 } from "../src/github/problemStatement.js";
+
+const execFileAsync = promisify(execFile);
 
 interface FixAgentContext {
   repo: string; // "owner/name"
@@ -30,7 +37,6 @@ interface FixAgent {
 }
 
 const GITHUB_API = "https://api.github.com";
-const GITHUB_GRAPHQL = "https://api.github.com/graphql";
 
 function ghHeaders(token: string): Record<string, string> {
   return {
@@ -41,77 +47,34 @@ function ghHeaders(token: string): Record<string, string> {
   };
 }
 
-async function graphql<T>(token: string, query: string, variables: unknown): Promise<T> {
-  const res = await fetch(GITHUB_GRAPHQL, {
-    method: "POST",
-    headers: ghHeaders(token),
-    body: JSON.stringify({ query, variables }),
-  });
-  const json = (await res.json()) as { data?: T; errors?: unknown };
-  if (!res.ok || json.errors) {
-    throw new Error(`GraphQL error: ${res.status} ${JSON.stringify(json.errors)}`);
-  }
-  return json.data as T;
-}
-
 /**
- * GitHub Copilot coding agent: assign the Issue to the Copilot bot.
- * Discovers the bot's node id via suggestedActors, then assigns it.
- * NOTE: requires Copilot coding agent to be enabled for the repo. This is the
- * most spec-dependent part; adjust the mutation if GitHub's API changes.
+ * GitHub Copilot coding agent: assign the Issue to @copilot via the official
+ * `gh issue edit --add-assignee @copilot`. Additive (does not clobber existing
+ * assignees) and lets gh resolve the bot, so there is no node-id juggling.
+ *
+ * IMPORTANT: the token MUST be a Copilot-licensed user's PAT (fine-grained:
+ * Issues read/write + Metadata read). The default Actions GITHUB_TOKEN cannot
+ * assign Copilot. Copilot coding agent must be enabled for the repo.
  */
 const copilotAgent: FixAgent = {
   name: "copilot",
   async trigger(ctx) {
-    const [owner, name] = ctx.repo.split("/");
-
-    const data = await graphql<{
-      repository: {
-        id: string;
-        suggestedActors: { nodes: { login: string; __typename: string; id: string }[] };
-      };
-    }>(
-      ctx.token,
-      `query($owner:String!, $name:String!) {
-        repository(owner:$owner, name:$name) {
-          id
-          suggestedActors(capabilities:[CAN_BE_ASSIGNED], first:50) {
-            nodes { login __typename ... on Bot { id } ... on User { id } }
-          }
-        }
-      }`,
-      { owner, name },
-    );
-
-    const copilot = data.repository.suggestedActors.nodes.find(
-      (n) => n.login === "copilot-swe-agent" || n.login === "Copilot",
-    );
-    if (!copilot) {
-      throw new Error(
-        "Copilot coding agent is not assignable on this repo. Enable it in repo settings.",
-      );
-    }
-
-    const issueNode = await graphql<{ repository: { issue: { id: string } } }>(
-      ctx.token,
-      `query($owner:String!, $name:String!, $num:Int!) {
-        repository(owner:$owner, name:$name) { issue(number:$num) { id } }
-      }`,
-      { owner, name, num: ctx.issue.number },
-    );
-
-    await graphql(
-      ctx.token,
-      `mutation($assignableId:ID!, $actorIds:[ID!]!) {
-        replaceActorsForAssignable(input:{assignableId:$assignableId, actorIds:$actorIds}) {
-          assignable { ... on Issue { number } }
-        }
-      }`,
-      { assignableId: issueNode.repository.issue.id, actorIds: [copilot.id] },
+    await execFileAsync(
+      "gh",
+      [
+        "issue",
+        "edit",
+        String(ctx.issue.number),
+        "--repo",
+        ctx.repo,
+        "--add-assignee",
+        "@copilot",
+      ],
+      { env: { ...process.env, GH_TOKEN: ctx.token } },
     );
 
     console.log(
-      `[triggerFixAgent] Assigned Copilot coding agent to Issue #${ctx.issue.number}`,
+      `[triggerFixAgent] Assigned @copilot to Issue #${ctx.issue.number}`,
     );
   },
 };
