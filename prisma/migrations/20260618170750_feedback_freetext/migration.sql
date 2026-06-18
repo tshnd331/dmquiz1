@@ -5,7 +5,7 @@
   - You are about to drop the column `question` on the `QuestionFeedback` table. All the data in the column will be lost.
   - You are about to drop the column `reason` on the `QuestionFeedback` table. All the data in the column will be lost.
   - You are about to drop the column `userCorrectAnswer` on the `QuestionFeedback` table. All the data in the column will be lost.
-  - Added the required column `content` to the `QuestionFeedback` table without a default value. This is not possible if the table is not empty.
+  - Added the required column `content` to the `QuestionFeedback` table. Existing rows are preserved by concatenating the old columns into `content` during the copy step.
 
 */
 -- RedefineTables
@@ -22,7 +22,17 @@ CREATE TABLE "new_QuestionFeedback" (
     "updatedAt" DATETIME NOT NULL,
     CONSTRAINT "QuestionFeedback_cardId_fkey" FOREIGN KEY ("cardId") REFERENCES "Card" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
-INSERT INTO "new_QuestionFeedback" ("cardId", "createdAt", "id", "issueNumber", "status", "updatedAt", "userId") SELECT "cardId", "createdAt", "id", "issueNumber", "status", "updatedAt", "userId" FROM "QuestionFeedback";
+INSERT INTO "new_QuestionFeedback" ("cardId", "content", "createdAt", "id", "issueNumber", "status", "updatedAt", "userId")
+SELECT
+    "cardId",
+    '質問: ' || "question" || char(10) ||
+    'Bot回答: ' || "botAnswer" ||
+    CASE WHEN "userCorrectAnswer" IS NOT NULL AND "userCorrectAnswer" <> ''
+         THEN char(10) || '本来の正解: ' || "userCorrectAnswer" ELSE '' END ||
+    CASE WHEN "reason" IS NOT NULL AND "reason" <> ''
+         THEN char(10) || '理由: ' || "reason" ELSE '' END,
+    "createdAt", "id", "issueNumber", "status", "updatedAt", "userId"
+FROM "QuestionFeedback";
 DROP TABLE "QuestionFeedback";
 ALTER TABLE "new_QuestionFeedback" RENAME TO "QuestionFeedback";
 CREATE INDEX "QuestionFeedback_cardId_idx" ON "QuestionFeedback"("cardId");
