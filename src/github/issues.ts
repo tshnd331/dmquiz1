@@ -25,10 +25,7 @@ export function buildFeedbackIssueTitle(fb: QuestionFeedback, cardName: string):
   return `[feedback] ${cardName}: ${q}`;
 }
 
-/**
- * Markdown body for the Issue created on admin approval.
- * Mirrors the format defined in AUTOMATION_PLAN.md.
- */
+/** Markdown body for the Issue created on admin approval. */
 export function buildFeedbackIssueBody(fb: QuestionFeedback, cardName: string): string {
   return [
     "## 📝 ユーザーフィードバック（管理者承認済み）",

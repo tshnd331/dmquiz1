@@ -25,7 +25,7 @@ export function generateProblemStatementFromIssue(issue: IssueLike): string {
     "   ルールを修正し、正しい回答を返すようにする。",
     "3. `test/` に、この誤りを再現する回帰テストを追加する（`node:test` + `tsx`）。",
     "4. `npm test` と `npm run build` が通ることを確認する。",
-    "5. 変更は PR として提出する（自動マージはしない）。PR 本文に `Closes #" + issue.number + "` を含める。",
+    `5. 変更は PR として提出する（自動マージはしない）。PR 本文に \`Closes #${issue.number}\` を含める。`,
     "",
     "--- Issue 本文 ---",
     issue.body ?? "(本文なし)",

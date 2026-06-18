@@ -353,6 +353,9 @@ export async function handleButtonInteraction(
         });
         return;
       }
+      // ACK within 3s before the GitHub API call, which can exceed the
+      // interaction timeout; finalize the message with editReply afterwards.
+      await interaction.deferUpdate();
       const issueNumber = await createFeedbackIssue({
         repo: config.githubRepo,
         token: config.githubToken,
@@ -364,13 +367,20 @@ export async function handleButtonInteraction(
         data: { status: "approved", issueNumber },
       });
       const embed = EmbedBuilder.from(interaction.message.embeds[0]).setColor(0x2ecc71);
-      await interaction.update({
+      await interaction.editReply({
         content: `✅ 承認済み（Issue #${issueNumber}）`,
         embeds: [embed],
         components: [],
       });
       return;
     }
+
+    // Unknown action under the feedback prefix: respond explicitly so the
+    // interaction never fails silently on Discord's side.
+    await interaction.reply({
+      content: "不明な操作です。",
+      ephemeral: true,
+    });
   } catch (err) {
     logger.error("Button interaction handler failed:", err);
     const msg = "処理中にエラーが発生しました。";
