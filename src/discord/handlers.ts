@@ -6,6 +6,7 @@ import {
   type QuizSession,
 } from "../quiz/QuizSession.js";
 import { logger } from "../utils/logger.js";
+import { handleFeedback } from "./feedbackHandler.js";
 
 const ANSWER_LABEL: Record<string, string> = {
   yes: "はい",
@@ -31,6 +32,8 @@ export async function handleInteraction(
         return await handleStatus(interaction, manager, channelId);
       case "dmquiz_giveup":
         return await handleGiveup(interaction, manager, channelId);
+      case "dmquiz_feedback":
+        return await handleFeedback(interaction);
       default:
         await interaction.reply({ content: "未知のコマンドです。", ephemeral: true });
     }

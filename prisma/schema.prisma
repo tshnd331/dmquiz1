@@ -29,6 +29,19 @@ model Card {
   @@index([cardType])
 }
 
+/// User feedback submitted via the /dmquiz_feedback Discord command.
+/// The raw feedback text is stored as-is and also forwarded to GitHub Issues.
+model QuestionFeedback {
+  id        Int      @id @default(autoincrement())
+  feedback  String
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
 /// Tracks crawl progress so the batch can resume, skip done URLs,
 /// and retry failures. `force` resets a target back to "pending".
 model CrawlTarget {

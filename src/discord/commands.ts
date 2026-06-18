@@ -33,4 +33,14 @@ export const commands = [
   new SlashCommandBuilder()
     .setName("dmquiz_giveup")
     .setDescription("ギブアップして答えを表示します"),
+
+  new SlashCommandBuilder()
+    .setName("dmquiz_feedback")
+    .setDescription("フィードバックを送信します")
+    .addStringOption((opt) =>
+      opt
+        .setName("feedback")
+        .setDescription("フィードバックの内容を自由に入力してください")
+        .setRequired(true),
+    ),
 ].map((c) => c.toJSON());
