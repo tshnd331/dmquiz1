@@ -20,6 +20,11 @@ export const config = {
   discordToken: process.env.DISCORD_TOKEN || undefined,
   discordClientId: process.env.DISCORD_CLIENT_ID || undefined,
   discordGuildId: process.env.DISCORD_GUILD_ID || undefined,
+  // Feedback automation pipeline (all optional; validated when used).
+  githubToken: process.env.GITHUB_TOKEN || undefined,
+  adminChannelId: process.env.ADMIN_CHANNEL_ID || undefined,
+  githubRepo: process.env.GITHUB_REPO || "tshnd331/dmquiz1",
+  fixAgent: process.env.FIX_AGENT || "copilot",
 };
 
 /** True once a Claude key is configured (the future answerer can be enabled). */

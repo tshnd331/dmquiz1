@@ -1,0 +1,46 @@
+name: pr-ci-and-review
+
+# Automatic CI for every PR (test + build). This is the required status
+# check enforced by branch protection. It does NOT auto-approve or
+# auto-merge — human review + merge (gate #2) is mandatory.
+# Copilot code review is enabled separately in repo settings (see
+# docs/AUTOMATION_SETUP.md); it is not driven from this workflow.
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - run: npm ci
+
+      # Prisma client is needed for tsc / tests to typecheck against models.
+      - run: npx prisma generate
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Post CI summary comment
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          status="${{ job.status }}"
+          gh pr comment "${{ github.event.pull_request.number }}" --body \
+            "🤖 自動CI結果: **${status}** (test / build)。マージは人間レビュー承認後に行ってください。"

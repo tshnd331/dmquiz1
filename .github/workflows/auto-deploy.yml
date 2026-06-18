@@ -1,0 +1,64 @@
+name: auto-deploy
+
+# Fires only after a human merges to main (gate #2). Runs on the
+# self-hosted runner that lives on the IDCF server (see
+# docs/AUTOMATION_SETUP.md), so deployment happens locally with no
+# inbound FW change and no SSH.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: auto-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: [self-hosted]
+    # Keep the same project name as the manually-started stack so we update
+    # the existing containers/volume instead of creating a parallel one.
+    env:
+      COMPOSE_PROJECT_NAME: dmquiz1
+    steps:
+      - uses: actions/checkout@v4
+        # Full history so `git log <before>..<sha>` can resolve Issue refs
+        # below (default fetch-depth: 1 would make the range empty).
+        with:
+          fetch-depth: 0
+
+      # docker-entrypoint.sh runs `prisma migrate deploy` on container start.
+      # Limit to the `bot` service so the runner container is never recreated.
+      - name: Build & restart bot
+        run: |
+          docker compose build bot
+          docker compose up -d bot
+
+      - name: Close resolved feedback Issues
+        env:
+          GH_TOKEN: ${{ secrets.AUTOMATION_TOKEN || github.token }}
+        run: |
+          # Collect "Closes/Fixes #N" references from the pushed commits.
+          nums=$(git log --format=%B ${{ github.event.before }}..${{ github.sha }} \
+            | grep -oiE '(close[sd]?|fix(e[sd])?|resolve[sd]?) #[0-9]+' \
+            | grep -oE '[0-9]+' | sort -u)
+          for num in $nums; do
+            echo "Closing Issue #$num"
+            gh issue close "$num" --comment "✅ main にマージ・デプロイ完了したためクローズします。" || true
+          done
+
+      - name: Notify Discord
+        if: always()
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          if [ -n "$WEBHOOK" ]; then
+            status="${{ job.status }}"
+            curl -sf -H "Content-Type: application/json" \
+              -d "{\"content\":\"🚀 デプロイ ${status}: \`${{ github.sha }}\` を本番反映しました。\"}" \
+              "$WEBHOOK" || true
+          fi
