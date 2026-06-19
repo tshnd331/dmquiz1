@@ -391,14 +391,11 @@ export async function handleModalSubmit(
         return;
       }
       await interaction.deferUpdate();
-      const embed = withCommentField(
-        EmbedBuilder.from(interaction.message!.embeds[0]).setColor(0x95a5a6),
-        comment,
-      );
+      const embeds = buildFinalEmbeds(interaction, 0x95a5a6, comment);
       await interaction.editReply({
         content: "❌ 却下（修正しない）",
-        embeds: [embed],
         components: [],
+        ...(embeds ? { embeds } : {}),
       });
       return;
     }
@@ -459,14 +456,11 @@ export async function handleModalSubmit(
         where: { id: feedbackId },
         data: { status: "approved", issueNumber, adminComment: comment },
       });
-      const embed = withCommentField(
-        EmbedBuilder.from(interaction.message!.embeds[0]).setColor(0x2ecc71),
-        comment,
-      );
+      const embeds = buildFinalEmbeds(interaction, 0x2ecc71, comment);
       await interaction.editReply({
         content: `✅ 承認済み（Issue #${issueNumber}）`,
-        embeds: [embed],
         components: [],
+        ...(embeds ? { embeds } : {}),
       });
       return;
     }
@@ -530,6 +524,23 @@ function withCommentField(embed: EmbedBuilder, comment: string | null): EmbedBui
     embed.addFields({ name: "管理者コメント", value: truncate(comment, 1000) });
   }
   return embed;
+}
+
+/**
+ * Rebuild the original feedback embed with a new colour and the optional admin
+ * comment. Returns undefined when the source message/embed is unavailable
+ * (deleted, partial fetch, …) so the caller can skip the embed update and still
+ * finalize the message — by this point the DB write (and Issue) already exist,
+ * so a missing embed must not throw and lose the status update.
+ */
+function buildFinalEmbeds(
+  interaction: ModalSubmitInteraction,
+  color: number,
+  comment: string | null,
+): EmbedBuilder[] | undefined {
+  const src = interaction.message?.embeds?.[0];
+  if (!src) return undefined;
+  return [withCommentField(EmbedBuilder.from(src).setColor(color), comment)];
 }
 
 function buildFeedbackEmbed(
