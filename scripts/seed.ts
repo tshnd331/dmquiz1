@@ -86,6 +86,16 @@ const SAMPLE_CARDS = [
     text: "自分のターンのはじめに、自分の山札の上から1枚目をシールド化することなどができる。コスト踏み倒し能力を持つ。",
     sourceUrl: "seed://katsia",
   },
+  {
+    name: "いけにえの鎖",
+    civilization: "闇",
+    cost: 5,
+    cardType: "呪文",
+    race: null,
+    power: null,
+    text: "S・トリガー。相手のクリーチャーを1体選ぶ。そのターンの終わりに、そのクリーチャーを破壊する。",
+    sourceUrl: "seed://ikenie-no-kusari",
+  },
 ];
 
 async function main() {
