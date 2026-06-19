@@ -38,13 +38,28 @@ npm run deploy-commands
 **Secrets:**
 | 名前 | 用途 |
 |------|------|
-| `AUTOMATION_TOKEN` | **Copilot ライセンス保持ユーザーの PAT**（fine-grained: Issues=Read and write, Metadata=Read）。Copilot のアサインには必須で、既定 `GITHUB_TOKEN` では不可。`copilot-agent-loop.yml` の trigger ステップは未設定だと明示エラーで停止する |
+| `AUTOMATION_TOKEN` | **Copilot ライセンス保持ユーザーの PAT**（fine-grained: Issues=Read and write, Metadata=Read）。Copilot のアサインには必須で、既定 `GITHUB_TOKEN` では不可。`copilot-agent-loop.yml` の trigger ステップは未設定だと明示エラーで停止する。**auto-deploy が生成する `.env` の `GITHUB_TOKEN`（bot の Issue 作成用）にも流用する** |
 | `DISCORD_WEBHOOK_URL` | デプロイ完了通知の Discord Webhook |
+| `DISCORD_TOKEN` | bot トークン（`.env` 生成用） |
+| `DISCORD_CLIENT_ID` | Discord アプリ（クライアント）ID（`.env` 生成用） |
+| `ADMIN_CHANNEL_ID` | 承認/却下ボタンを出す管理者チャンネル ID（`.env` 生成用） |
+| `CLAUDE_API_KEY` | 任意。将来の Claude 回答エンジン用（`.env` 生成用） |
 
 **Variables:**
 | 名前 | 用途 |
 |------|------|
 | `FIX_AGENT` | 修正エンジン選択。`copilot`（既定）/ `claude`（未実装スタブ） |
+| `DISCORD_GUILD_ID` | 任意。ギルド限定スラッシュコマンド登録用。未設定でグローバル登録（`.env` 生成用） |
+| `GITHUB_REPO` | Issue 作成先 `owner/name`。未設定で既定 `tshnd331/dmquiz1`（`.env` 生成用） |
+
+> **コンテナ化 runner と `.env`**: §1 の手動 `.env` 配置はローカル/手動運用向け。
+> self-hosted runner（§5）でのデプロイは**毎回 checkout 作業ディレクトリで `docker compose`
+> を実行**し、`.env` は gitignore で未追跡かつ checkout の既定 `clean` で消えるため作業
+> ディレクトリに存在しない。そのため `auto-deploy.yml` が**デプロイ毎に上記 Secrets/Variables
+> から `.env` を再生成**する（`Generate .env from secrets` ステップ）。bot イメージは
+> `.env` を含まない（`.dockerignore`）ため、bot のランタイム env はこの生成値が `up` 時に
+> 注入されたもの＝**毎デプロイ更新される**。未登録の値は空になり bot 起動に失敗するため、
+> デプロイ前に登録すること。
 
 ---
 
