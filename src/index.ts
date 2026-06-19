@@ -3,7 +3,11 @@ import { requireBotConfig, hasClaudeApiKey } from "./config.js";
 import { QuizManager } from "./quiz/QuizManager.js";
 import { RuleBasedQuestionAnswerer } from "./quiz/RuleBasedQuestionAnswerer.js";
 import type { QuestionAnswerer } from "./quiz/QuestionAnswerer.js";
-import { handleInteraction, handleButtonInteraction } from "./discord/handlers.js";
+import {
+  handleInteraction,
+  handleButtonInteraction,
+  handleModalSubmit,
+} from "./discord/handlers.js";
 import { disconnectPrisma } from "./db/prisma.js";
 import { logger } from "./utils/logger.js";
 
@@ -32,6 +36,8 @@ async function main() {
       await handleInteraction(interaction, manager);
     } else if (interaction.isButton()) {
       await handleButtonInteraction(interaction);
+    } else if (interaction.isModalSubmit()) {
+      await handleModalSubmit(interaction);
     }
   });
 

@@ -43,8 +43,12 @@ export function buildFeedbackIssueTitle(fb: QuestionFeedback, cardName: string):
 }
 
 /** Markdown body for the Issue created on admin approval. */
-export function buildFeedbackIssueBody(fb: QuestionFeedback, cardName: string): string {
-  return [
+export function buildFeedbackIssueBody(
+  fb: QuestionFeedback,
+  cardName: string,
+  adminComment?: string | null,
+): string {
+  const lines = [
     "## 📝 ユーザーフィードバック（管理者承認済み）",
     "",
     "**内容:**",
@@ -53,11 +57,20 @@ export function buildFeedbackIssueBody(fb: QuestionFeedback, cardName: string): 
     `**カード名:** ${cardName}`,
     "",
     `**ユーザー ID:** ${fb.userId}`,
+  ];
+
+  const comment = adminComment?.trim();
+  if (comment) {
+    lines.push("", "## 🛠 管理者コメント", "", fencedBlock(comment));
+  }
+
+  lines.push(
     "",
     "---",
     "",
     "このIssueは管理者が承認済みです。修正エージェントにより自動ハンドル予定。",
-  ].join("\n");
+  );
+  return lines.join("\n");
 }
 
 export interface CreateIssueParams {
