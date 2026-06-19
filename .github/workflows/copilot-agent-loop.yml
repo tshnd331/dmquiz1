@@ -90,6 +90,11 @@ jobs:
             echo "::error::AUTOMATION_TOKEN secret is required (Copilot-licensed PAT)."
             exit 1
           fi
+          # Ensure the `in-progress` label exists (idempotent); gh issue edit
+          # --add-label fails if the label is not defined in the repo.
+          gh label create in-progress \
+            --color FBCA04 --description "Handed off to the fix agent" \
+            --force >/dev/null
           for num in $(echo '${{ steps.find.outputs.issues }}' | jq -r '.[]'); do
             echo "::group::Issue #$num"
             gh issue edit "$num" --add-label in-progress
