@@ -25,9 +25,12 @@ permissions:
   contents: read
 
 concurrency:
-  # Per-Issue for event runs (parallel across Issues, serialized per Issue);
-  # falls back to a unique run id for scan runs (schedule / dispatch-without-input).
-  group: copilot-agent-loop-${{ github.event.issue.number || github.run_id }}
+  # Per-Issue when the Issue is known (issues event OR dispatch with `issue`):
+  # parallel across Issues, serialized per Issue so the same Issue is never
+  # handed off twice before the `in-progress` label propagates. Scan runs
+  # (schedule / dispatch-without-input) share one `scan` group so overlapping
+  # scans queue instead of double-picking the same not-yet-labelled Issue.
+  group: copilot-agent-loop-${{ github.event.issue.number || github.event.inputs.issue || 'scan' }}
   cancel-in-progress: false
 
 jobs:
@@ -66,7 +69,12 @@ jobs:
             # Single Issue from the triggering event (already label-gated by `if`).
             issues="[$EVENT_ISSUE]"
           elif [ -n "$INPUT_ISSUE" ]; then
-            # Manual run targeting a specific Issue.
+            # Manual run targeting a specific Issue. Validate strictly numeric
+            # to avoid invalid JSON / shell-injection via the dispatch input.
+            if ! printf '%s' "$INPUT_ISSUE" | grep -qE '^[0-9]+$'; then
+              echo "::error::issue input must be a positive integer (got: $INPUT_ISSUE)."
+              exit 1
+            fi
             issues="[$INPUT_ISSUE]"
           else
             # schedule / manual-without-input: scan all approved, not-in-progress Issues.
