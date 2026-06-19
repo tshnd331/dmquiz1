@@ -87,9 +87,11 @@ export class RuleBasedQuestionAnswerer implements QuestionAnswerer {
         return unknown("カードタイプ情報が未取得です。");
       }
     }
-    const has = normalize(haystack).includes(normalize(matched));
+    const normalizedMatched = normalize(matched);
+    const has = normalize(haystack).includes(normalizedMatched);
     if (!card.cardType) return null; // avoid false negatives without structured data
-    return verdict(has, `カードタイプは「${card.cardType}」です。`);
+    const negated = isTypeNegated(q, normalizedMatched);
+    return verdict(negated ? !has : has, `カードタイプは「${card.cardType}」です。`);
   }
 
   // --- コスト -----------------------------------------------------------
@@ -181,6 +183,18 @@ function normalize(s: string): string {
 function extractNumber(s: string): number | null {
   const m = s.match(/-?\d+/);
   return m ? parseInt(m[0], 10) : null;
+}
+
+/**
+ * Returns true when the question asks whether the card is NOT the given type.
+ * Handles patterns like "〜以外ですか", "〜ではないですか", "〜ではないカードタイプですか".
+ * Both `q` and `normalizedType` must already be normalised via `normalize()`.
+ */
+function isTypeNegated(q: string, normalizedType: string): boolean {
+  const idx = q.indexOf(normalizedType);
+  if (idx === -1) return false;
+  const after = q.slice(idx + normalizedType.length);
+  return /^(ではない|じゃない|以外|ではなく)/.test(after);
 }
 
 /** Convert a power string like "+99999" / "12000" / "∞" to a number. */
