@@ -1,16 +1,21 @@
 name: copilot-agent-loop
 
-# Event-driven: when an approved feedback Issue appears, immediately hand it to
-# the configured fix agent (Copilot coding agent by default). Human gate #1
-# (admin approval) already happened in Discord; Issues are created already
-# carrying both `feedback` and `approved` labels.
+# Event-driven: when an approved feedback Issue is created, hand it to the
+# configured fix agent (Copilot coding agent by default). Human gate #1 (admin
+# approval) already happened in Discord; Issues are created already carrying
+# both `feedback` and `approved` labels, so the `opened` event alone is enough.
+#
+# We deliberately do NOT subscribe to `labeled`: GitHub emits one `labeled`
+# event per label applied at creation time, which fired this workflow once per
+# label (opened + N labeled = N+1 redundant runs). Should an Issue ever be
+# approved by adding the label after creation, the cron below recovers it.
 #
 # A low-frequency cron remains as a safety net to recover any Issue missed by
 # the event path. Manual runs can target a specific Issue or scan all.
 
 on:
   issues:
-    types: [opened, labeled, reopened]
+    types: [opened, reopened]
   schedule:
     # Safety net only; GitHub may further delay/skip scheduled runs.
     - cron: "*/15 * * * *"
@@ -27,9 +32,9 @@ permissions:
 concurrency:
   # Per-Issue when the Issue is known (issues event OR dispatch with `issue`):
   # parallel across Issues, serialized per Issue so the same Issue is never
-  # handed off twice before the `in-progress` label propagates. Scan runs
-  # (schedule / dispatch-without-input) share one `scan` group so overlapping
-  # scans queue instead of double-picking the same not-yet-labelled Issue.
+  # handed off twice (e.g. an `opened` run overlapping a `reopened` run). Scan
+  # runs (schedule / dispatch-without-input) share one `scan` group so
+  # overlapping scans queue instead of double-picking the same Issue.
   group: copilot-agent-loop-${{ github.event.issue.number || github.event.inputs.issue || 'scan' }}
   cancel-in-progress: false
 
