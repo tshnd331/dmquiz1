@@ -65,7 +65,12 @@ export class RuleBasedQuestionAnswerer implements QuestionAnswerer {
     if (!card.civilization) {
       return unknown("このカードの文明情報が未取得です。");
     }
-    const has = card.civilization.includes(matched.key);
+    // Collect ALL civilizations mentioned in the question so that a question
+    // like "水自然ですか" requires the card to have BOTH Water AND Nature, not
+    // just Water. Using only the first match caused false "yes" answers for
+    // multi-civ cards (e.g. "水光" answering yes to "水自然ですか").
+    const allMatched = civs.filter((c) => c.words.some((w) => q.includes(normalize(w))));
+    const has = allMatched.every((c) => card.civilization!.includes(c.key));
     return verdict(has, `文明は「${card.civilization}」です。`);
   }
 

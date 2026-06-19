@@ -57,3 +57,30 @@ test("多色ですか: 流星の精霊ミーアのような多文明カードは
   assert.equal(result.answer, "yes");
   assert.match(result.reason, /光\/水/);
 });
+
+// --- 文明 (civilization) -------------------------------------------------
+
+test("文明: 水光カードに水自然ですかはno (星海の精霊エーテルのバグ再現)", async () => {
+  // Issue #16: 水光 card should NOT answer "yes" to "水自然ですか"
+  const result = await answerer.answer(
+    card({ name: "星海の精霊エーテル", civilization: "水/光" }),
+    "水自然ですか",
+  );
+  assert.equal(result.answer, "no");
+});
+
+test("文明: 水自然カードに水自然ですかはyes", async () => {
+  const result = await answerer.answer(
+    card({ civilization: "水/自然" }),
+    "水自然ですか",
+  );
+  assert.equal(result.answer, "yes");
+});
+
+test("文明: 水光カードに水文明ですかはyes", async () => {
+  const result = await answerer.answer(
+    card({ civilization: "水/光" }),
+    "水文明ですか",
+  );
+  assert.equal(result.answer, "yes");
+});
