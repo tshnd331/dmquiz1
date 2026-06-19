@@ -9,7 +9,7 @@
 
 ## 修正の進め方
 
-1. Issue 本文の 質問 / カード / Bot の回答 / 正解 を確認する。
+1. Issue 本文の質問 / カード / Bot の回答 / 正解 を確認する。
 2. `src/quiz/RuleBasedQuestionAnswerer.ts` の該当カテゴリ（文明 / コスト / パワー / 種族 / カードタイプ）のルールを修正し、正しい回答を返すようにする。
 3. `test/` にこの誤りを再現する回帰テストを追加する（`node:test` + `tsx`、`test/**/*.test.ts`）。
 
