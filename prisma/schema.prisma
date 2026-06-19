@@ -44,6 +44,8 @@ model QuestionFeedback {
   status      String @default("pending") // "pending" | "processing" | "approved" | "rejected"
   issueNumber Int? // GitHub Issue number created after approval
 
+  adminComment String? // 承認/却下時に管理者が残したコメント
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

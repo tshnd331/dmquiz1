@@ -3,8 +3,12 @@ import {
   ButtonBuilder,
   ButtonStyle,
   EmbedBuilder,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
   type ButtonInteraction,
   type ChatInputCommandInteraction,
+  type ModalSubmitInteraction,
   type SendableChannels,
 } from "discord.js";
 import type { QuizManager } from "../quiz/QuizManager.js";
@@ -313,26 +317,90 @@ export async function handleButtonInteraction(
       return;
     }
 
-    if (action === "fb_reject") {
-      // Atomically claim the pending row so a concurrent press can't also act.
+    if (action === "fb_approve" && !config.githubToken) {
+      await interaction.reply({
+        content: "GITHUB_TOKEN が未設定のため Issue を作成できません。",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    // Both approve and reject open a modal so the admin can attach an optional
+    // comment. The actual DB claim / Issue creation happens on modal submit so
+    // that cancelling the modal leaves the feedback untouched (no processing
+    // row left stranded).
+    if (action === "fb_approve" || action === "fb_reject") {
+      await interaction.showModal(buildFeedbackCommentModal(action, feedbackId));
+      return;
+    }
+
+    // Unknown action under the feedback prefix: respond explicitly so the
+    // interaction never fails silently on Discord's side.
+    await interaction.reply({
+      content: "不明な操作です。",
+      ephemeral: true,
+    });
+  } catch (err) {
+    logger.error("Button interaction handler failed:", err);
+    const msg = "処理中にエラーが発生しました。";
+    if (interaction.deferred || interaction.replied) {
+      await interaction.followUp({ content: msg, ephemeral: true }).catch(() => {});
+    } else {
+      await interaction.reply({ content: msg, ephemeral: true }).catch(() => {});
+    }
+  }
+}
+
+/**
+ * Handle the comment modal submitted from an approve/reject button. This is
+ * where the feedback row is atomically claimed and, on approval, the GitHub
+ * Issue is created — including the admin's optional comment.
+ */
+export async function handleModalSubmit(
+  interaction: ModalSubmitInteraction,
+): Promise<void> {
+  if (!interaction.customId.startsWith(FEEDBACK_BUTTON_PREFIX)) return;
+
+  if (!config.adminChannelId || interaction.channelId !== config.adminChannelId) {
+    await interaction.reply({
+      content: "この操作は管理者チャンネルでのみ実行できます。",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  try {
+    const [action, idStr] = interaction.customId.split(":");
+    const feedbackId = Number(idStr);
+    if (!Number.isInteger(feedbackId)) {
+      await interaction.reply({ content: "不正な操作です。", ephemeral: true });
+      return;
+    }
+
+    const raw = interaction.fields.getTextInputValue("comment").trim();
+    const comment = raw.length > 0 ? raw : null;
+
+    if (action === "fb_reject_modal") {
+      // Atomically claim the pending row so a concurrent action can't also act.
       const claim = await prisma.questionFeedback.updateMany({
         where: { id: feedbackId, status: "pending" },
-        data: { status: "rejected" },
+        data: { status: "rejected", adminComment: comment },
       });
       if (claim.count !== 1) {
         await reportNotClaimable(interaction, feedbackId);
         return;
       }
-      const embed = EmbedBuilder.from(interaction.message.embeds[0]).setColor(0x95a5a6);
-      await interaction.update({
+      await interaction.deferUpdate();
+      const embeds = buildFinalEmbeds(interaction, 0x95a5a6, comment);
+      await interaction.editReply({
         content: "❌ 却下（修正しない）",
-        embeds: [embed],
         components: [],
+        ...(embeds ? { embeds } : {}),
       });
       return;
     }
 
-    if (action === "fb_approve") {
+    if (action === "fb_approve_modal") {
       if (!config.githubToken) {
         await interaction.reply({
           content: "GITHUB_TOKEN が未設定のため Issue を作成できません。",
@@ -375,7 +443,7 @@ export async function handleButtonInteraction(
           repo: config.githubRepo,
           token: config.githubToken,
           title: buildFeedbackIssueTitle(fb, fb.card.name),
-          body: buildFeedbackIssueBody(fb, fb.card.name),
+          body: buildFeedbackIssueBody(fb, fb.card.name, comment),
         });
       } catch (err) {
         // Release the claim so the approval can be retried.
@@ -386,25 +454,20 @@ export async function handleButtonInteraction(
       }
       await prisma.questionFeedback.update({
         where: { id: feedbackId },
-        data: { status: "approved", issueNumber },
+        data: { status: "approved", issueNumber, adminComment: comment },
       });
-      const embed = EmbedBuilder.from(interaction.message.embeds[0]).setColor(0x2ecc71);
+      const embeds = buildFinalEmbeds(interaction, 0x2ecc71, comment);
       await interaction.editReply({
         content: `✅ 承認済み（Issue #${issueNumber}）`,
-        embeds: [embed],
         components: [],
+        ...(embeds ? { embeds } : {}),
       });
       return;
     }
 
-    // Unknown action under the feedback prefix: respond explicitly so the
-    // interaction never fails silently on Discord's side.
-    await interaction.reply({
-      content: "不明な操作です。",
-      ephemeral: true,
-    });
+    await interaction.reply({ content: "不明な操作です。", ephemeral: true });
   } catch (err) {
-    logger.error("Button interaction handler failed:", err);
+    logger.error("Modal submit handler failed:", err);
     const msg = "処理中にエラーが発生しました。";
     if (interaction.deferred || interaction.replied) {
       await interaction.followUp({ content: msg, ephemeral: true }).catch(() => {});
@@ -421,7 +484,7 @@ export async function handleButtonInteraction(
  * processed by another admin, or gone), reading the latest status from the DB.
  */
 async function reportNotClaimable(
-  interaction: ButtonInteraction,
+  interaction: ButtonInteraction | ModalSubmitInteraction,
   feedbackId: number,
 ): Promise<void> {
   const fb = await prisma.questionFeedback.findUnique({ where: { id: feedbackId } });
@@ -429,6 +492,55 @@ async function reportNotClaimable(
     ? `このフィードバックは既に「${fb.status}」のため操作できません。`
     : "対象のフィードバックが見つかりません。";
   await interaction.reply({ content, ephemeral: true });
+}
+
+/**
+ * Build the comment modal shown when an admin presses approve/reject. The
+ * comment is optional; the action ("fb_approve" / "fb_reject") is encoded in
+ * the modal customId as "<action>_modal:<feedbackId>".
+ */
+function buildFeedbackCommentModal(action: string, feedbackId: number): ModalBuilder {
+  const approve = action === "fb_approve";
+  const comment = new TextInputBuilder()
+    .setCustomId("comment")
+    .setLabel("コメント（任意）")
+    .setPlaceholder(
+      approve ? "修正方針や補足（Issueに追記されます）" : "却下理由など",
+    )
+    .setStyle(TextInputStyle.Paragraph)
+    .setRequired(false)
+    .setMaxLength(1000);
+  return new ModalBuilder()
+    .setCustomId(`${action}_modal:${feedbackId}`)
+    .setTitle(approve ? "承認コメント" : "却下コメント")
+    .addComponents(
+      new ActionRowBuilder<TextInputBuilder>().addComponents(comment),
+    );
+}
+
+/** Append the admin comment as an embed field when one was provided. */
+function withCommentField(embed: EmbedBuilder, comment: string | null): EmbedBuilder {
+  if (comment) {
+    embed.addFields({ name: "管理者コメント", value: truncate(comment, 1000) });
+  }
+  return embed;
+}
+
+/**
+ * Rebuild the original feedback embed with a new colour and the optional admin
+ * comment. Returns undefined when the source message/embed is unavailable
+ * (deleted, partial fetch, …) so the caller can skip the embed update and still
+ * finalize the message — by this point the DB write (and Issue) already exist,
+ * so a missing embed must not throw and lose the status update.
+ */
+function buildFinalEmbeds(
+  interaction: ModalSubmitInteraction,
+  color: number,
+  comment: string | null,
+): EmbedBuilder[] | undefined {
+  const src = interaction.message?.embeds?.[0];
+  if (!src) return undefined;
+  return [withCommentField(EmbedBuilder.from(src).setColor(color), comment)];
 }
 
 function buildFeedbackEmbed(
