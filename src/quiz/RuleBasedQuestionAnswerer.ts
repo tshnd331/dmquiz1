@@ -30,7 +30,13 @@ export class RuleBasedQuestionAnswerer implements QuestionAnswerer {
 
   // --- 多色 -------------------------------------------------------------
   private tryMulticolor(card: Card, q: string): AnswerResult | null {
-    if (!q.includes("多色") && !q.includes("たしょく") && !q.includes("multicolor")) return null;
+    if (
+      !q.includes("多色") &&
+      !q.includes("たしょく") &&
+      !q.includes("タショク") &&
+      !q.includes("multicolor")
+    )
+      return null;
     if (!card.civilization) {
       return unknown("このカードの文明情報が未取得です。");
     }
