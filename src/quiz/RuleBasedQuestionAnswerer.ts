@@ -18,6 +18,7 @@ export class RuleBasedQuestionAnswerer implements QuestionAnswerer {
     const q = normalize(question);
 
     return (
+      this.tryMulticolor(card, q) ??
       this.tryCivilization(card, q) ??
       this.tryCardType(card, q) ??
       this.tryCost(card, q) ??
@@ -25,6 +26,16 @@ export class RuleBasedQuestionAnswerer implements QuestionAnswerer {
       this.tryRaceOrText(card, q) ??
       unknown("この質問はルールベースでは判定できませんでした。")
     );
+  }
+
+  // --- 多色 -------------------------------------------------------------
+  private tryMulticolor(card: Card, q: string): AnswerResult | null {
+    if (!q.includes("多色") && !q.includes("たしょく") && !q.includes("multicolor")) return null;
+    if (!card.civilization) {
+      return unknown("このカードの文明情報が未取得です。");
+    }
+    const isMulticolor = card.civilization.includes("/");
+    return verdict(isMulticolor, `文明は「${card.civilization}」です。`);
   }
 
   // --- 文明 -------------------------------------------------------------
