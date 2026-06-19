@@ -16,10 +16,9 @@ function card(overrides: Partial<Card> = {}): Card {
     race: null,
     power: null,
     text: null,
-    rawText: null,
-    sourceUrl: null,
-    createdAt: new Date(0),
-    updatedAt: new Date(0),
+    rawText: "",
+    sourceUrl: "seed://test-card",
+    fetchedAt: new Date(0),
     ...overrides,
   };
 }
