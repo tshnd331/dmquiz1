@@ -40,9 +40,11 @@ jobs:
 
       # Re-register slash commands from the just-deployed commit so the
       # Discord-side command schema never drifts from the running handler.
-      # (entrypoint re-runs `prisma migrate deploy`, but that is idempotent.)
+      # Use `exec` (not `run`) so we reuse the already-started container:
+      # `run` would spawn a second bot whose entrypoint re-runs
+      # `prisma migrate deploy` concurrently, racing on the shared SQLite DB.
       - name: Sync Discord slash commands
-        run: docker compose run --rm bot npm run deploy-commands
+        run: docker compose exec -T bot npm run deploy-commands
 
       - name: Close resolved feedback Issues
         env:
