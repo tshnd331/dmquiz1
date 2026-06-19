@@ -1,26 +1,49 @@
 name: copilot-agent-loop
 
-# Poll approved feedback Issues every 5 minutes and hand each off to the
-# configured fix agent (Copilot coding agent by default). Human gate #1
-# (admin approval) already happened in Discord; this only acts on Issues
-# that already carry both `feedback` and `approved` labels.
+# Event-driven: when an approved feedback Issue appears, immediately hand it to
+# the configured fix agent (Copilot coding agent by default). Human gate #1
+# (admin approval) already happened in Discord; Issues are created already
+# carrying both `feedback` and `approved` labels.
+#
+# A low-frequency cron remains as a safety net to recover any Issue missed by
+# the event path. Manual runs can target a specific Issue or scan all.
 
 on:
+  issues:
+    types: [opened, labeled, reopened]
   schedule:
-    - cron: "*/5 * * * *"
+    # Safety net only; GitHub may further delay/skip scheduled runs.
+    - cron: "*/15 * * * *"
   workflow_dispatch:
+    inputs:
+      issue:
+        description: "Issue number to process (blank = scan all approved Issues)"
+        required: false
 
 permissions:
   issues: write
   contents: read
 
 concurrency:
-  group: copilot-agent-loop
+  # Per-Issue when the Issue is known (issues event OR dispatch with `issue`):
+  # parallel across Issues, serialized per Issue so the same Issue is never
+  # handed off twice before the `in-progress` label propagates. Scan runs
+  # (schedule / dispatch-without-input) share one `scan` group so overlapping
+  # scans queue instead of double-picking the same not-yet-labelled Issue.
+  group: copilot-agent-loop-${{ github.event.issue.number || github.event.inputs.issue || 'scan' }}
   cancel-in-progress: false
 
 jobs:
   dispatch:
     runs-on: ubuntu-latest
+    # For issues events, only proceed when the Issue is approved and not yet
+    # in progress. schedule / workflow_dispatch always proceed; the target is
+    # then resolved in "Resolve target Issues" (scan, or the `issue` input).
+    if: >
+      github.event_name != 'issues' ||
+      ( contains(github.event.issue.labels.*.name, 'feedback') &&
+        contains(github.event.issue.labels.*.name, 'approved') &&
+        !contains(github.event.issue.labels.*.name, 'in-progress') )
     env:
       # A PAT is usually required to assign the Copilot coding agent.
       # Falls back to the default token (sufficient for labelling).
@@ -36,13 +59,31 @@ jobs:
 
       - run: npm ci
 
-      - name: Find approved Issues without in-progress
+      - name: Resolve target Issues
         id: find
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_ISSUE: ${{ github.event.issue.number }}
+          INPUT_ISSUE: ${{ github.event.inputs.issue }}
         run: |
-          issues=$(gh issue list \
-            --label feedback --label approved \
-            --state open --json number,labels \
-            --jq '[.[] | select((.labels | map(.name) | index("in-progress")) | not) | .number]')
+          if [ "$EVENT_NAME" = "issues" ]; then
+            # Single Issue from the triggering event (already label-gated by `if`).
+            issues="[$EVENT_ISSUE]"
+          elif [ -n "$INPUT_ISSUE" ]; then
+            # Manual run targeting a specific Issue. Validate strictly numeric
+            # to avoid invalid JSON / shell-injection via the dispatch input.
+            if ! printf '%s' "$INPUT_ISSUE" | grep -qE '^[1-9][0-9]*$'; then
+              echo "::error::issue input must be a positive integer (got: $INPUT_ISSUE)."
+              exit 1
+            fi
+            issues="[$INPUT_ISSUE]"
+          else
+            # schedule / manual-without-input: scan all approved, not-in-progress Issues.
+            issues=$(gh issue list \
+              --label feedback --label approved \
+              --state open --json number,labels \
+              --jq '[.[] | select((.labels | map(.name) | index("in-progress")) | not) | .number]')
+          fi
           echo "issues=$issues" >> "$GITHUB_OUTPUT"
           echo "Detected: $issues"
 
@@ -58,6 +99,11 @@ jobs:
             echo "::error::AUTOMATION_TOKEN secret is required (Copilot-licensed PAT)."
             exit 1
           fi
+          # Ensure the `in-progress` label exists (idempotent); gh issue edit
+          # --add-label fails if the label is not defined in the repo.
+          gh label create in-progress \
+            --color FBCA04 --description "Handed off to the fix agent" \
+            --force >/dev/null
           for num in $(echo '${{ steps.find.outputs.issues }}' | jq -r '.[]'); do
             echo "::group::Issue #$num"
             gh issue edit "$num" --add-label in-progress
