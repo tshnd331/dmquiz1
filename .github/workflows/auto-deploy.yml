@@ -38,6 +38,12 @@ jobs:
           docker compose build bot
           docker compose up -d bot
 
+      # Re-register slash commands from the just-deployed commit so the
+      # Discord-side command schema never drifts from the running handler.
+      # (entrypoint re-runs `prisma migrate deploy`, but that is idempotent.)
+      - name: Sync Discord slash commands
+        run: docker compose run --rm bot npm run deploy-commands
+
       - name: Close resolved feedback Issues
         env:
           GH_TOKEN: ${{ secrets.AUTOMATION_TOKEN || github.token }}
