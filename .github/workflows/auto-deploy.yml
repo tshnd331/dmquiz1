@@ -31,6 +31,51 @@ jobs:
         with:
           fetch-depth: 0
 
+      # `.env` is gitignored, so the runner's fresh checkout never contains it
+      # (and checkout's default `clean: true` would wipe any hand-placed copy).
+      # docker-compose.yml's `env_file: .env` is resolved by the compose CLI
+      # against this working dir, so regenerate `.env` here from GitHub
+      # Secrets/Variables every deploy. The bot image excludes `.env`
+      # (.dockerignore), so its runtime env comes solely from these values
+      # injected at `up` time — i.e. the bot's env is refreshed each deploy.
+      - name: Generate .env from secrets
+        env:
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+          DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}
+          DISCORD_GUILD_ID: ${{ vars.DISCORD_GUILD_ID }}
+          ADMIN_CHANNEL_ID: ${{ secrets.ADMIN_CHANNEL_ID }}
+          # bot's Issue-creation PAT. `GITHUB_TOKEN` is an Actions-reserved
+          # name and can't be a custom secret, so reuse AUTOMATION_TOKEN
+          # (Issues R/W; see docs/AUTOMATION_SETUP.md §2) and map it below.
+          BOT_GITHUB_TOKEN: ${{ secrets.AUTOMATION_TOKEN }}
+          GITHUB_REPO: ${{ vars.GITHUB_REPO || 'tshnd331/dmquiz1' }}
+          FIX_AGENT: ${{ vars.FIX_AGENT || 'copilot' }}
+          CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
+        run: |
+          umask 077
+          # Fail-fast on the only vars the bot needs to boot (config.ts's
+          # requireBotConfig). Generating an empty token would deploy a bot
+          # that crash-loops on login = silent downtime; stop here instead.
+          # The rest (ADMIN_CHANNEL_ID/AUTOMATION_TOKEN/...) are optional —
+          # missing ones only disable the feedback pipeline, not boot.
+          missing=""
+          [ -n "$DISCORD_TOKEN" ] || missing="$missing DISCORD_TOKEN"
+          [ -n "$DISCORD_CLIENT_ID" ] || missing="$missing DISCORD_CLIENT_ID"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing required secret(s):$missing — register them in Settings → Secrets and variables → Actions (see docs/AUTOMATION_SETUP.md §2)."
+            exit 1
+          fi
+          cat > .env <<EOF
+          DISCORD_TOKEN=${DISCORD_TOKEN}
+          DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID}
+          DISCORD_GUILD_ID=${DISCORD_GUILD_ID}
+          ADMIN_CHANNEL_ID=${ADMIN_CHANNEL_ID}
+          GITHUB_TOKEN=${BOT_GITHUB_TOKEN}
+          GITHUB_REPO=${GITHUB_REPO}
+          FIX_AGENT=${FIX_AGENT}
+          CLAUDE_API_KEY=${CLAUDE_API_KEY}
+          EOF
+
       # docker-entrypoint.sh runs `prisma migrate deploy` on container start.
       # Limit to the `bot` service so the runner container is never recreated.
       - name: Build & restart bot
