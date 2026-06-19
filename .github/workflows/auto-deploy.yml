@@ -53,6 +53,18 @@ jobs:
           CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
         run: |
           umask 077
+          # Fail-fast on the only vars the bot needs to boot (config.ts's
+          # requireBotConfig). Generating an empty token would deploy a bot
+          # that crash-loops on login = silent downtime; stop here instead.
+          # The rest (ADMIN_CHANNEL_ID/AUTOMATION_TOKEN/...) are optional —
+          # missing ones only disable the feedback pipeline, not boot.
+          missing=""
+          [ -n "$DISCORD_TOKEN" ] || missing="$missing DISCORD_TOKEN"
+          [ -n "$DISCORD_CLIENT_ID" ] || missing="$missing DISCORD_CLIENT_ID"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing required secret(s):$missing — register them in Settings → Secrets and variables → Actions (see docs/AUTOMATION_SETUP.md §2)."
+            exit 1
+          fi
           cat > .env <<EOF
           DISCORD_TOKEN=${DISCORD_TOKEN}
           DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID}

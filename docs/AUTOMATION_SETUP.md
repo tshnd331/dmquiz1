@@ -58,8 +58,15 @@ npm run deploy-commands
 > ディレクトリに存在しない。そのため `auto-deploy.yml` が**デプロイ毎に上記 Secrets/Variables
 > から `.env` を再生成**する（`Generate .env from secrets` ステップ）。bot イメージは
 > `.env` を含まない（`.dockerignore`）ため、bot のランタイム env はこの生成値が `up` 時に
-> 注入されたもの＝**毎デプロイ更新される**。未登録の値は空になり bot 起動に失敗するため、
-> デプロイ前に登録すること。
+> 注入されたもの＝**毎デプロイ更新される**。
+>
+> **必須 / 任意**（実装は `src/config.ts` の `requireBotConfig()`）:
+> - **必須**（bot 起動に必要）: `DISCORD_TOKEN` `DISCORD_CLIENT_ID`。未登録なら
+>   `Generate .env from secrets` ステップが `::error::` で **fail-fast**（空トークンでの
+>   デプロイ＝起動クラッシュループを防ぐ）。
+> - **任意**: `ADMIN_CHANNEL_ID` `AUTOMATION_TOKEN`(→`GITHUB_TOKEN`) `CLAUDE_API_KEY`
+>   `DISCORD_GUILD_ID` `GITHUB_REPO` `FIX_AGENT`。未登録でも bot は起動するが、
+>   フィードバック自動化等の該当機能が無効化される。
 
 ---
 
