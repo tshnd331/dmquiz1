@@ -59,7 +59,7 @@ function cardLine(c: {
   const parts = [
     c.civilization ? `文明: ${c.civilization}` : null,
     c.cost !== null ? `コスト: ${c.cost}` : null,
-    c.cardType ? `種別: ${c.cardType}` : null,
+    c.cardType ? `カードタイプ: ${c.cardType}` : null,
   ].filter(Boolean);
   const meta = parts.length ? `（${parts.join(" / ")}）` : "";
   return `- ${c.name} ${meta}`.trimEnd();
