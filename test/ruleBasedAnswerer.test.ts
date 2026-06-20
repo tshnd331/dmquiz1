@@ -236,3 +236,8 @@ test("種族: 墓堀怪人アシッドフィストにアーマロイドではな
   );
   assert.equal(result.answer, "yes");
 });
+
+test("種族: 商人でよ は 商人種族に yes", async () => {
+  const result = await answerer.answer(card({ race: "商人" }), "商人でよ");
+  assert.equal(result.answer, "yes");
+});

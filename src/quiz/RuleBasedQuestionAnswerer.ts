@@ -216,6 +216,7 @@ function extractKeyword(q: string): string | null {
     .replace(/を?持っていますか.*$/g, "")
     .replace(/を?持つ.*$/g, "")
     .replace(TRAILING_NEGATION_PATTERN, "")
+    .replace(/でよ.*$/g, "")
     .replace(/ですか.*$/g, "")
     .replace(/[?？。、.,!！]/g, "")
     .trim();
