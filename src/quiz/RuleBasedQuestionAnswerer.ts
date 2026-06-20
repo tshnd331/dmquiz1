@@ -360,7 +360,7 @@ function isTrailingExcept(q: string): boolean {
 
 function isRaceCountQuestion(q: string): boolean {
   if (!q.includes("種族")) return false;
-  return /((ふたつ|二つ|2つ|２つ|2|２)以上|複数)/.test(q);
+  return MULTI_RACE_QUESTION_PATTERNS.some((pattern) => pattern.test(q));
 }
 
 function countRaces(race: string): number {
@@ -369,5 +369,7 @@ function countRaces(race: string): number {
     .map((part) => part.trim())
     .filter(Boolean).length;
 }
+
+const MULTI_RACE_QUESTION_PATTERNS = [/(ふたつ|二つ)以上/, /[2２](つ)?以上/, /複数/];
 
 export type { YesNoUnknown };
