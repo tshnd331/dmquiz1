@@ -344,3 +344,44 @@ test("種族: 墓堀怪人アシッドフィストにアーマロイドではな
   );
   assert.equal(result.answer, "yes");
 });
+
+// Regression: Issue #37 - 「ドラゴンですか」のように部分一致する種族クエリが正しく判定される
+test("種族: アーマード・ドラゴンにドラゴンですか（部分一致）はyes", async () => {
+  const result = await answerer.answer(
+    card({ race: "アーマード・ドラゴン" }),
+    "ドラゴンですか？",
+  );
+  assert.equal(result.answer, "yes");
+});
+
+test("種族: エンジェル・コマンドにコマンドですか（部分一致）はyes", async () => {
+  const result = await answerer.answer(
+    card({ race: "エンジェル・コマンド" }),
+    "コマンドですか？",
+  );
+  assert.equal(result.answer, "yes");
+});
+
+test("種族: アーマード・ドラゴンに種族はドラゴンですかはyes", async () => {
+  const result = await answerer.answer(
+    card({ race: "アーマード・ドラゴン" }),
+    "種族はドラゴンですか？",
+  );
+  assert.equal(result.answer, "yes");
+});
+
+test("種族: アーマード・ドラゴンにドラゴン種族ですかはyes", async () => {
+  const result = await answerer.answer(
+    card({ race: "アーマード・ドラゴン" }),
+    "ドラゴン種族ですか？",
+  );
+  assert.equal(result.answer, "yes");
+});
+
+test("種族: エンジェル・コマンドにドラゴンですかはno", async () => {
+  const result = await answerer.answer(
+    card({ race: "エンジェル・コマンド" }),
+    "ドラゴンですか？",
+  );
+  assert.equal(result.answer, "no");
+});
