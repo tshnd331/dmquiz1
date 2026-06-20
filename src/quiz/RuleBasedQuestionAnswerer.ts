@@ -179,6 +179,17 @@ export class RuleBasedQuestionAnswerer implements QuestionAnswerer {
 
   // --- 種族 / テキスト --------------------------------------------------
   private tryRaceOrText(card: Card, q: string): AnswerResult | null {
+    const raceCountMinimum = extractRaceCountMinimum(q);
+    if (raceCountMinimum !== null) {
+      if (!card.race) return unknown("このカードの種族情報が未取得です。");
+      const raceCount = countRaces(card.race);
+      const hasEnoughRaces = raceCount >= raceCountMinimum;
+      return verdict(
+        isTrailingNegation(q) ? !hasEnoughRaces : hasEnoughRaces,
+        `種族は「${card.race}」です。`,
+      );
+    }
+
     // Pattern: "〜ですか" / "〜を持っていますか" — strip the suffix and search.
     const keyword = extractKeyword(q);
     if (!keyword) return null;
@@ -346,6 +357,74 @@ function isTrailingNegation(q: string): boolean {
 
 function isTrailingExcept(q: string): boolean {
   return /以外(ですか)?[?？。、.,!！]*$/.test(q);
+}
+
+const RACE_COUNT_WORDS: Array<[string, number]> = [
+  ["ひとつ", 1],
+  ["一つ", 1],
+  ["いっこ", 1],
+  ["一個", 1],
+  ["ふたつ", 2],
+  ["二つ", 2],
+  ["にこ", 2],
+  ["二個", 2],
+  ["みっつ", 3],
+  ["三つ", 3],
+  ["さんこ", 3],
+  ["三個", 3],
+  ["よっつ", 4],
+  ["四つ", 4],
+  ["よんこ", 4],
+  ["四個", 4],
+  ["いつつ", 5],
+  ["五つ", 5],
+  ["ごこ", 5],
+  ["五個", 5],
+  ["むっつ", 6],
+  ["六つ", 6],
+  ["ろっこ", 6],
+  ["六個", 6],
+  ["ななつ", 7],
+  ["七つ", 7],
+  ["ななこ", 7],
+  ["七個", 7],
+  ["やっつ", 8],
+  ["八つ", 8],
+  ["はっこ", 8],
+  ["八個", 8],
+  ["ここのつ", 9],
+  ["九つ", 9],
+  ["きゅうこ", 9],
+  ["九個", 9],
+  ["とお", 10],
+  ["十", 10],
+  ["じゅっこ", 10],
+  ["十個", 10],
+  ["複数", 2],
+];
+
+function extractRaceCountMinimum(q: string): number | null {
+  if (!q.includes("種族")) return null;
+  const numeric = q.match(/([0-9０-９]+)(?:つ|個)?以上/);
+  if (numeric) {
+    return parseInt(numeric[1].replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xfee0)), 10);
+  }
+  const wordCandidates = RACE_COUNT_WORDS.map(([word, value]) => ({
+    value,
+    index: word === "複数" ? q.indexOf(word) : q.indexOf(`${word}以上`),
+  })).filter((candidate) => candidate.index >= 0);
+  if (wordCandidates.length > 0) {
+    wordCandidates.sort((a, b) => a.index - b.index);
+    return wordCandidates[0].value;
+  }
+  return null;
+}
+
+function countRaces(race: string): number {
+  return race
+    .split(/[\/／]/)
+    .map((part) => part.trim())
+    .filter(Boolean).length;
 }
 
 export type { YesNoUnknown };
