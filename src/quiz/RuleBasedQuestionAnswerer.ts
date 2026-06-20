@@ -333,6 +333,7 @@ function extractKeyword(q: string): string | null {
     .replace(TRAILING_NEGATION_PATTERN, "")
     .replace(/ですか.*$/g, "")
     .replace(/[?？。、.,!！]/g, "")
+    .replace(/^種族は?|種族$/g, "")
     .trim();
   // Too short or generic to be meaningful.
   if (k.length < 2) return null;
