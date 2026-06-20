@@ -37,7 +37,7 @@ async function main() {
     } else if (interaction.isButton()) {
       await handleButtonInteraction(interaction);
     } else if (interaction.isModalSubmit()) {
-      await handleModalSubmit(interaction);
+      await handleModalSubmit(interaction, manager);
     }
   });
 

@@ -38,6 +38,7 @@ model QuestionFeedback {
   cardId Int?
   card   Card? @relation(fields: [cardId], references: [id], onDelete: Cascade)
 
+  type    String @default("other") // フィードバック種別: "bug" | "request" | "other"
   content String // 統合フリーテキスト（質問・本来の正解・理由）
   userId  String
 
