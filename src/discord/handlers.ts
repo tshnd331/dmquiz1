@@ -668,7 +668,7 @@ function cardSummary(session: QuizSession): string {
   const parts = [
     c.civilization ? `文明: ${c.civilization}` : null,
     c.cost !== null && c.cost !== undefined ? `コスト: ${c.cost}` : null,
-    c.cardType ? `種別: ${c.cardType}` : null,
+    c.cardType ? `カードタイプ: ${c.cardType}` : null,
     c.race ? `種族: ${c.race}` : null,
     c.power ? `パワー: ${c.power}` : null,
   ].filter(Boolean);
