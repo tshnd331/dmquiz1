@@ -402,3 +402,19 @@ test("種族: デビルマスクに種族がふたつ以上ありますかはno"
   );
   assert.equal(result.answer, "no");
 });
+
+test("種族: 3種族カードに種族が3つ以上ありますかはyes", async () => {
+  const result = await answerer.answer(
+    card({ name: "トリプル種族", race: "ジョーカーズ/チーム切札/ヒューマノイド" }),
+    "種族が3つ以上ありますか？",
+  );
+  assert.equal(result.answer, "yes");
+});
+
+test("種族: 3種族カードに種族が4つ以上ありますかはno", async () => {
+  const result = await answerer.answer(
+    card({ name: "トリプル種族", race: "ジョーカーズ/チーム切札/ヒューマノイド" }),
+    "種族が4つ以上ありますか？",
+  );
+  assert.equal(result.answer, "no");
+});

@@ -179,12 +179,13 @@ export class RuleBasedQuestionAnswerer implements QuestionAnswerer {
 
   // --- 種族 / テキスト --------------------------------------------------
   private tryRaceOrText(card: Card, q: string): AnswerResult | null {
-    if (isRaceCountQuestion(q)) {
+    const raceCountMinimum = extractRaceCountMinimum(q);
+    if (raceCountMinimum !== null) {
       if (!card.race) return unknown("このカードの種族情報が未取得です。");
       const raceCount = countRaces(card.race);
-      const hasMultipleRaces = raceCount >= 2;
+      const hasEnoughRaces = raceCount >= raceCountMinimum;
       return verdict(
-        isTrailingNegation(q) ? !hasMultipleRaces : hasMultipleRaces,
+        isTrailingNegation(q) ? !hasEnoughRaces : hasEnoughRaces,
         `種族は「${card.race}」です。`,
       );
     }
@@ -358,9 +359,19 @@ function isTrailingExcept(q: string): boolean {
   return /以外(ですか)?[?？。、.,!！]*$/.test(q);
 }
 
-function isRaceCountQuestion(q: string): boolean {
-  if (!q.includes("種族")) return false;
-  return MULTI_RACE_QUESTION_PATTERNS.some((pattern) => pattern.test(q));
+function extractRaceCountMinimum(q: string): number | null {
+  if (!q.includes("種族")) return null;
+  const numeric = q.match(/([0-9]+)(?:つ)?以上/);
+  if (numeric) {
+    return parseInt(numeric[1], 10);
+  }
+  for (const [word, value] of RACE_COUNT_WORDS) {
+    if (q.includes(`${word}以上`)) {
+      return value;
+    }
+  }
+  if (q.includes("複数")) return 2;
+  return null;
 }
 
 function countRaces(race: string): number {
@@ -370,6 +381,27 @@ function countRaces(race: string): number {
     .filter(Boolean).length;
 }
 
-const MULTI_RACE_QUESTION_PATTERNS = [/(ふたつ|二つ)以上/, /[2２](つ)?以上/, /複数/];
+const RACE_COUNT_WORDS: Array<[string, number]> = [
+  ["ひとつ", 1],
+  ["一つ", 1],
+  ["ふたつ", 2],
+  ["二つ", 2],
+  ["みっつ", 3],
+  ["三つ", 3],
+  ["よっつ", 4],
+  ["四つ", 4],
+  ["いつつ", 5],
+  ["五つ", 5],
+  ["むっつ", 6],
+  ["六つ", 6],
+  ["ななつ", 7],
+  ["七つ", 7],
+  ["やっつ", 8],
+  ["八つ", 8],
+  ["ここのつ", 9],
+  ["九つ", 9],
+  ["とお", 10],
+  ["十", 10],
+];
 
 export type { YesNoUnknown };
