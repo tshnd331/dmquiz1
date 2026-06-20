@@ -34,9 +34,9 @@ model Card {
 /// User feedback on a bot answer, gated by an admin approval step.
 /// status flows pending -> approved (GitHub Issue created) | rejected.
 model QuestionFeedback {
-  id     Int  @id @default(autoincrement())
-  cardId Int
-  card   Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  id     Int   @id @default(autoincrement())
+  cardId Int?
+  card   Card? @relation(fields: [cardId], references: [id], onDelete: Cascade)
 
   content String // 統合フリーテキスト（質問・本来の正解・理由）
   userId  String

@@ -238,15 +238,10 @@ async function handleFeedback(
   manager: QuizManager,
   channelId: string,
 ): Promise<void> {
+  // Feedback can be sent with or without an active quiz. If a quiz is in
+  // progress, the feedback is linked to the current card; otherwise it is a
+  // general feedback with no card association.
   const session = manager.get(channelId);
-  if (!session) {
-    await interaction.reply({
-      content:
-        "フィードバックは進行中のクイズに対してのみ送れます。`/dmquiz_start` で開始後にご利用ください。",
-      ephemeral: true,
-    });
-    return;
-  }
 
   if (!config.adminChannelId || !config.githubToken) {
     logger.warn(
@@ -265,7 +260,7 @@ async function handleFeedback(
 
   const fb = await prisma.questionFeedback.create({
     data: {
-      cardId: session.card.id,
+      cardId: session?.card?.id ?? null,
       content,
       userId: interaction.user.id,
       status: "pending",
@@ -284,7 +279,7 @@ async function handleFeedback(
     return;
   }
 
-  const embed = buildFeedbackEmbed(fb, session.card.name);
+  const embed = buildFeedbackEmbed(fb, session?.card?.name ?? null);
   const row = buildFeedbackButtons(fb.id);
   await (channel as SendableChannels).send({ embeds: [embed], components: [row] });
 
@@ -437,13 +432,14 @@ export async function handleModalSubmit(
       // ACK within 3s before the GitHub API call, which can exceed the
       // interaction timeout; finalize the message with editReply afterwards.
       await interaction.deferUpdate();
+      const cardName = fb.card?.name ?? null;
       let issueNumber: number;
       try {
         issueNumber = await createFeedbackIssue({
           repo: config.githubRepo,
           token: config.githubToken,
-          title: buildFeedbackIssueTitle(fb, fb.card.name),
-          body: buildFeedbackIssueBody(fb, fb.card.name, comment),
+          title: buildFeedbackIssueTitle(fb, cardName),
+          body: buildFeedbackIssueBody(fb, cardName, comment),
         });
       } catch (err) {
         // Release the claim so the approval can be retried.
@@ -545,14 +541,14 @@ function buildFinalEmbeds(
 
 function buildFeedbackEmbed(
   fb: { content: string },
-  cardName: string,
+  cardName: string | null,
 ): EmbedBuilder {
   return new EmbedBuilder()
     .setTitle("📝 ユーザーフィードバック (要確認)")
     .setColor(0xf1c40f)
     .addFields(
       { name: "内容", value: truncate(fb.content, 1000) },
-      { name: "カード", value: cardName, inline: true },
+      { name: "カード", value: cardName ?? "(カード指定なし)", inline: true },
     );
 }
 
