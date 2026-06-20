@@ -359,28 +359,6 @@ function isTrailingExcept(q: string): boolean {
   return /以外(ですか)?[?？。、.,!！]*$/.test(q);
 }
 
-function extractRaceCountMinimum(q: string): number | null {
-  if (!q.includes("種族")) return null;
-  const numeric = q.match(/([0-9]+)(?:つ)?以上/);
-  if (numeric) {
-    return parseInt(numeric[1], 10);
-  }
-  for (const [word, value] of RACE_COUNT_WORDS) {
-    if (q.includes(`${word}以上`)) {
-      return value;
-    }
-  }
-  if (q.includes("複数")) return 2;
-  return null;
-}
-
-function countRaces(race: string): number {
-  return race
-    .split(/[\/／]/)
-    .map((part) => part.trim())
-    .filter(Boolean).length;
-}
-
 const RACE_COUNT_WORDS: Array<[string, number]> = [
   ["ひとつ", 1],
   ["一つ", 1],
@@ -402,6 +380,31 @@ const RACE_COUNT_WORDS: Array<[string, number]> = [
   ["九つ", 9],
   ["とお", 10],
   ["十", 10],
+  ["複数", 2],
 ];
+
+function extractRaceCountMinimum(q: string): number | null {
+  if (!q.includes("種族")) return null;
+  const numeric = q.match(/([0-9０-９]+)(?:つ)?以上/);
+  if (numeric) {
+    return parseInt(numeric[1].replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xfee0)), 10);
+  }
+  const wordCandidates = RACE_COUNT_WORDS.map(([word, value]) => ({
+    value,
+    index: word === "複数" ? q.indexOf(word) : q.indexOf(`${word}以上`),
+  })).filter((candidate) => candidate.index >= 0);
+  if (wordCandidates.length > 0) {
+    wordCandidates.sort((a, b) => a.index - b.index);
+    return wordCandidates[0].value;
+  }
+  return null;
+}
+
+function countRaces(race: string): number {
+  return race
+    .split(/[\/／]/)
+    .map((part) => part.trim())
+    .filter(Boolean).length;
+}
 
 export type { YesNoUnknown };
