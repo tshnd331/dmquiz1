@@ -168,8 +168,7 @@ function unknown(reason: string): AnswerResult {
   return { answer: "unknown", reason };
 }
 
-const TRAILING_NEGATION_PATTERN = /(ではない|じゃない|以外)(ですか)?[?？]*$/;
-
+const TRAILING_NEGATION_PATTERN = /(ではない|じゃない|以外)(ですか)?[?？。、.,!！]*$/;
 /** Lowercase, trim, normalise full-width chars, drop spaces/punctuation noise. */
 function normalize(s: string): string {
   return s
