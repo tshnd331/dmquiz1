@@ -77,9 +77,27 @@ export class RuleBasedQuestionAnswerer implements QuestionAnswerer {
       if (!card.cardType) {
         return unknown("カードタイプ情報が未取得です。");
       }
-      const normalizedMatchedType = normalize(matchedType);
-      const hasType = normalize(card.cardType).includes(normalizedMatchedType);
-      const combined = hasAll && hasType;
+
+      const normalizedCardType = normalize(card.cardType);
+      const idxNot = q.indexOf("ではなく");
+
+      // Handle "AではなくB" by treating the post-"ではなく" type as the target when present.
+      const targetType =
+        idxNot === -1
+          ? matchedType
+          : CARD_TYPES.find((t) => q.slice(idxNot + "ではなく".length).includes(normalize(t))) ??
+            matchedType;
+
+      const hasTargetType = normalizedCardType.includes(normalize(targetType));
+
+      // If we can detect the excluded type (A), ensure the card is not that type.
+      const excludedType =
+        idxNot === -1 ? null : CARD_TYPES.find((t) => q.slice(0, idxNot).includes(normalize(t)));
+      const hasExcludedType = excludedType ? normalizedCardType.includes(normalize(excludedType)) : false;
+
+      const passesType = idxNot === -1 ? hasTargetType : hasTargetType && !hasExcludedType;
+      const combined = hasAll && passesType;
+
       return verdict(
         isTrailingNegation(q) ? !combined : combined,
         `文明は「${card.civilization}」、カードタイプは「${card.cardType}」です。`,
