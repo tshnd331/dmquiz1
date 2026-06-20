@@ -21,7 +21,10 @@ export const FEEDBACK_TYPES = [
 
 /** Resolve a feedback type key to its definition, falling back to "other". */
 export function feedbackTypeOf(key: string): (typeof FEEDBACK_TYPES)[number] {
-  return FEEDBACK_TYPES.find((t) => t.key === key) ?? FEEDBACK_TYPES[2];
+  return (
+    FEEDBACK_TYPES.find((t) => t.key === key) ??
+    FEEDBACK_TYPES.find((t) => t.key === "other")!
+  );
 }
 
 /** Zero-width space; breaks `@mention` / `#issue` auto-links without changing the visible text. */

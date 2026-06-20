@@ -290,7 +290,11 @@ async function submitFeedbackForm(
     return;
   }
 
-  const type = interaction.fields.getStringSelectValues("fb_type")[0] ?? "other";
+  // Normalise the selected value so only a known key is ever persisted, even if
+  // the component changes or an unexpected value is submitted.
+  const type = feedbackTypeOf(
+    interaction.fields.getStringSelectValues("fb_type")[0] ?? "other",
+  ).key;
   const content = interaction.fields.getTextInputValue("fb_content").trim();
   if (content.length === 0) {
     await interaction.reply({
