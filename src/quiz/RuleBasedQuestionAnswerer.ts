@@ -147,12 +147,12 @@ export class RuleBasedQuestionAnswerer implements QuestionAnswerer {
     const negated = isTrailingNegation(q);
 
     if (card.race && raceHit) {
-      return verdict(negated ? false : true, `種族は「${card.race}」です。`);
+      return verdict(!negated, `種族は「${card.race}」です。`);
     }
-    if (textHit) return verdict(negated ? false : true, "能力テキストに該当する記述があります。");
+    if (textHit) return verdict(!negated, "能力テキストに該当する記述があります。");
     if (card.race) {
       // Known race, keyword not present anywhere -> no.
-      return verdict(negated ? true : false, `種族は「${card.race}」です。`);
+      return verdict(negated, `種族は「${card.race}」です。`);
     }
     return null;
   }

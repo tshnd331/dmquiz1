@@ -85,14 +85,6 @@ test("文明: 水光カードに水文明ですかはyes", async () => {
   assert.equal(result.answer, "yes");
 });
 
-test("文明: 墓堀怪人アシッドフィストに闇文明ではないですかはno", async () => {
-  const result = await answerer.answer(
-    card({ name: "墓堀怪人アシッドフィスト", civilization: "闇" }),
-    "闇文明ではないですか？",
-  );
-  assert.equal(result.answer, "no");
-});
-
 // --- カードタイプ (否定形) -----------------------------------------------
 // Regression: Issue #20 - 嘆きの影ダーク・レイブン への否定形質問が正しく回答されなかった
 
@@ -196,6 +188,14 @@ test("カードタイプ: 進化クリーチャーではないですか - 進化
 // --- コスト / パワー / 種族 (否定形) --------------------------------------
 // Regression: Issue #22 - 墓堀怪人アシッドフィスト への否定形質問が
 // カードタイプ以外で正しく判定されなかった
+
+test("文明: 墓堀怪人アシッドフィストに闇文明ではないですかはno", async () => {
+  const result = await answerer.answer(
+    card({ name: "墓堀怪人アシッドフィスト", civilization: "闇" }),
+    "闇文明ではないですか？",
+  );
+  assert.equal(result.answer, "no");
+});
 
 test("コスト: 墓堀怪人アシッドフィストにコスト5ではないですかはyes", async () => {
   const result = await answerer.answer(
