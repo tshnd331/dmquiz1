@@ -168,6 +168,8 @@ function unknown(reason: string): AnswerResult {
   return { answer: "unknown", reason };
 }
 
+const TRAILING_NEGATION_PATTERN = /(ではない|じゃない|以外)(ですか)?[?？]*$/;
+
 /** Lowercase, trim, normalise full-width chars, drop spaces/punctuation noise. */
 function normalize(s: string): string {
   return s
@@ -214,7 +216,7 @@ function extractKeyword(q: string): string | null {
     .replace(/それは?/g, "")
     .replace(/を?持っていますか.*$/g, "")
     .replace(/を?持つ.*$/g, "")
-    .replace(/(ではない|じゃない|以外)ですか.*$/g, "")
+    .replace(TRAILING_NEGATION_PATTERN, "")
     .replace(/ですか.*$/g, "")
     .replace(/[?？。、.,!！]/g, "")
     .trim();
@@ -224,7 +226,7 @@ function extractKeyword(q: string): string | null {
 }
 
 function isTrailingNegation(q: string): boolean {
-  return /(ではない|じゃない|以外)ですか[?？]*$/.test(q) || /(ではない|じゃない|以外)[?？]*$/.test(q);
+  return TRAILING_NEGATION_PATTERN.test(q);
 }
 
 export type { YesNoUnknown };
