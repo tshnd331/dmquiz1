@@ -362,30 +362,50 @@ function isTrailingExcept(q: string): boolean {
 const RACE_COUNT_WORDS: Array<[string, number]> = [
   ["ひとつ", 1],
   ["一つ", 1],
+  ["いっこ", 1],
+  ["一個", 1],
   ["ふたつ", 2],
   ["二つ", 2],
+  ["にこ", 2],
+  ["二個", 2],
   ["みっつ", 3],
   ["三つ", 3],
+  ["さんこ", 3],
+  ["三個", 3],
   ["よっつ", 4],
   ["四つ", 4],
+  ["よんこ", 4],
+  ["四個", 4],
   ["いつつ", 5],
   ["五つ", 5],
+  ["ごこ", 5],
+  ["五個", 5],
   ["むっつ", 6],
   ["六つ", 6],
+  ["ろっこ", 6],
+  ["六個", 6],
   ["ななつ", 7],
   ["七つ", 7],
+  ["ななこ", 7],
+  ["七個", 7],
   ["やっつ", 8],
   ["八つ", 8],
+  ["はっこ", 8],
+  ["八個", 8],
   ["ここのつ", 9],
   ["九つ", 9],
+  ["きゅうこ", 9],
+  ["九個", 9],
   ["とお", 10],
   ["十", 10],
+  ["じゅっこ", 10],
+  ["十個", 10],
   ["複数", 2],
 ];
 
 function extractRaceCountMinimum(q: string): number | null {
   if (!q.includes("種族")) return null;
-  const numeric = q.match(/([0-9０-９]+)(?:つ)?以上/);
+  const numeric = q.match(/([0-9０-９]+)(?:つ|個)?以上/);
   if (numeric) {
     return parseInt(numeric[1].replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xfee0)), 10);
   }

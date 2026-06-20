@@ -418,3 +418,19 @@ test("種族: 3種族カードに種族が4つ以上ありますかはno", async
   );
   assert.equal(result.answer, "no");
 });
+
+test("種族: ジョーカーズ/チーム切札に種族が2個以上ありますかはyes", async () => {
+  const result = await answerer.answer(
+    card({ name: "石臼男", race: "ジョーカーズ/チーム切札" }),
+    "種族が2個以上ありますか？",
+  );
+  assert.equal(result.answer, "yes");
+});
+
+test("種族: デビルマスクに種族が2個以上ありますかはno", async () => {
+  const result = await answerer.answer(
+    card({ name: "デビルマスク", race: "デビルマスク" }),
+    "種族が2個以上ありますか？",
+  );
+  assert.equal(result.answer, "no");
+});
