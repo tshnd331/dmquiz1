@@ -3,7 +3,9 @@ import {
   ButtonBuilder,
   ButtonStyle,
   EmbedBuilder,
+  LabelBuilder,
   ModalBuilder,
+  StringSelectMenuBuilder,
   TextInputBuilder,
   TextInputStyle,
   type ButtonInteraction,
@@ -21,9 +23,12 @@ import { logger } from "../utils/logger.js";
 import { config } from "../config.js";
 import { prisma } from "../db/prisma.js";
 import {
+  FEEDBACK_ISSUE_LABELS,
+  FEEDBACK_TYPES,
   buildFeedbackIssueBody,
   buildFeedbackIssueTitle,
   createFeedbackIssue,
+  feedbackTypeOf,
 } from "../github/issues.js";
 
 const ANSWER_LABEL: Record<string, string> = {
@@ -51,7 +56,7 @@ export async function handleInteraction(
       case "dmquiz_giveup":
         return await handleGiveup(interaction, manager, channelId);
       case "dmquiz_feedback":
-        return await handleFeedback(interaction, manager, channelId);
+        return await handleFeedback(interaction);
       default:
         await interaction.reply({ content: "未知のコマンドです。", ephemeral: true });
     }
@@ -235,14 +240,7 @@ const FEEDBACK_BUTTON_PREFIX = "fb_";
 
 async function handleFeedback(
   interaction: ChatInputCommandInteraction,
-  manager: QuizManager,
-  channelId: string,
 ): Promise<void> {
-  // Feedback can be sent with or without an active quiz. If a quiz is in
-  // progress, the feedback is linked to the current card; otherwise it is a
-  // general feedback with no card association.
-  const session = manager.get(channelId);
-
   if (!config.adminChannelId || !config.githubToken) {
     logger.warn(
       "Feedback received but ADMIN_CHANNEL_ID or GITHUB_TOKEN is not configured.",
@@ -254,20 +252,70 @@ async function handleFeedback(
     return;
   }
 
-  const content = interaction.options.getString("content", true);
+  // Open the report form; the actual DB write and admin notification happen on
+  // modal submit (handleFeedbackSubmit).
+  await interaction.showModal(buildFeedbackFormModal());
+}
+
+/**
+ * Persist a submitted feedback form and post the admin approval embed/buttons.
+ * Mirrors the old slash-command flow but reads the type/content from the modal.
+ */
+async function handleFeedbackSubmit(
+  interaction: ModalSubmitInteraction,
+  manager: QuizManager,
+): Promise<void> {
+  try {
+    await submitFeedbackForm(interaction, manager);
+  } catch (err) {
+    logger.error("Feedback form submit failed:", err);
+    const msg = "処理中にエラーが発生しました。";
+    if (interaction.deferred || interaction.replied) {
+      await interaction.followUp({ content: msg, ephemeral: true }).catch(() => {});
+    } else {
+      await interaction.reply({ content: msg, ephemeral: true }).catch(() => {});
+    }
+  }
+}
+
+async function submitFeedbackForm(
+  interaction: ModalSubmitInteraction,
+  manager: QuizManager,
+): Promise<void> {
+  if (!config.adminChannelId) {
+    await interaction.reply({
+      content: "フィードバック機能は管理者により未設定です。受付できませんでした。",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const type = interaction.fields.getStringSelectValues("fb_type")[0] ?? "other";
+  const content = interaction.fields.getTextInputValue("fb_content").trim();
+  if (content.length === 0) {
+    await interaction.reply({
+      content: "フィードバック内容が空です。もう一度お試しください。",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  // Re-read the session at submit time so an active quiz still links its card.
+  // (The quiz may end between opening and submitting the form; that's fine.)
+  const session = manager.get(interaction.channelId ?? "");
 
   await interaction.deferReply({ ephemeral: true });
 
   const fb = await prisma.questionFeedback.create({
     data: {
       cardId: session?.card?.id ?? null,
+      type,
       content,
       userId: interaction.user.id,
       status: "pending",
     },
   });
 
-  // Post the admin approval embed + buttons to the admin channel.
   const channel = await interaction.client.channels
     .fetch(config.adminChannelId)
     .catch(() => null);
@@ -286,6 +334,40 @@ async function handleFeedback(
   await interaction.editReply(
     "✅ フィードバックありがとうございます！（管理者の確認後に対応されます）",
   );
+}
+
+/**
+ * Build the user-facing report form: a required type dropdown plus a required
+ * free-text body. customId `feedback_submit` deliberately avoids the `fb_`
+ * prefix so it is not caught by the admin-only approve/reject gate.
+ */
+function buildFeedbackFormModal(): ModalBuilder {
+  const typeSelect = new StringSelectMenuBuilder()
+    .setCustomId("fb_type")
+    .setPlaceholder("選択してください")
+    .setMinValues(1)
+    .setMaxValues(1)
+    .addOptions(
+      FEEDBACK_TYPES.map((t) => ({ label: t.label, value: t.key })),
+    );
+  const content = new TextInputBuilder()
+    .setCustomId("fb_content")
+    .setStyle(TextInputStyle.Paragraph)
+    .setRequired(true)
+    .setMaxLength(1000)
+    .setPlaceholder("Botの回答が誤っていた点・本来の正解・理由などを自由に記入");
+
+  return new ModalBuilder()
+    .setCustomId("feedback_submit")
+    .setTitle("フィードバック")
+    .addLabelComponents(
+      new LabelBuilder()
+        .setLabel("フィードバック種別")
+        .setStringSelectMenuComponent(typeSelect),
+      new LabelBuilder()
+        .setLabel("フィードバック内容")
+        .setTextInputComponent(content),
+    );
 }
 
 /** Route a button interaction; only feedback approve/reject is handled. */
@@ -353,7 +435,13 @@ export async function handleButtonInteraction(
  */
 export async function handleModalSubmit(
   interaction: ModalSubmitInteraction,
+  manager: QuizManager,
 ): Promise<void> {
+  // User-submitted report form (not admin-gated; runs in any channel).
+  if (interaction.customId === "feedback_submit") {
+    return await handleFeedbackSubmit(interaction, manager);
+  }
+
   if (!interaction.customId.startsWith(FEEDBACK_BUTTON_PREFIX)) return;
 
   if (!config.adminChannelId || interaction.channelId !== config.adminChannelId) {
@@ -440,6 +528,7 @@ export async function handleModalSubmit(
           token: config.githubToken,
           title: buildFeedbackIssueTitle(fb, cardName),
           body: buildFeedbackIssueBody(fb, cardName, comment),
+          labels: [...FEEDBACK_ISSUE_LABELS, feedbackTypeOf(fb.type).gh],
         });
       } catch (err) {
         // Release the claim so the approval can be retried.
@@ -540,13 +629,14 @@ function buildFinalEmbeds(
 }
 
 function buildFeedbackEmbed(
-  fb: { content: string },
+  fb: { content: string; type: string },
   cardName: string | null,
 ): EmbedBuilder {
   return new EmbedBuilder()
     .setTitle("📝 ユーザーフィードバック (要確認)")
     .setColor(0xf1c40f)
     .addFields(
+      { name: "種別", value: feedbackTypeOf(fb.type).label, inline: true },
       { name: "内容", value: truncate(fb.content, 1000) },
       { name: "カード", value: cardName ?? "(カード指定なし)", inline: true },
     );

@@ -8,6 +8,22 @@ export const FEEDBACK_ISSUE_LABELS = [
   "approved",
 ];
 
+/**
+ * Feedback categories selected by the user in the report form. `key` is the
+ * value stored in the DB (`QuestionFeedback.type`); `label` is shown in Discord
+ * and the Issue body; `gh` is the extra GitHub label added on approval.
+ */
+export const FEEDBACK_TYPES = [
+  { key: "bug", label: "不具合報告", gh: "bug" },
+  { key: "request", label: "要望", gh: "enhancement" },
+  { key: "other", label: "その他", gh: "question" },
+] as const;
+
+/** Resolve a feedback type key to its definition, falling back to "other". */
+export function feedbackTypeOf(key: string): (typeof FEEDBACK_TYPES)[number] {
+  return FEEDBACK_TYPES.find((t) => t.key === key) ?? FEEDBACK_TYPES[2];
+}
+
 /** Zero-width space; breaks `@mention` / `#issue` auto-links without changing the visible text. */
 const ZWSP = "​";
 
@@ -53,6 +69,8 @@ export function buildFeedbackIssueBody(
 ): string {
   const lines = [
     "## 📝 ユーザーフィードバック（管理者承認済み）",
+    "",
+    `**種別:** ${feedbackTypeOf(fb.type).label}`,
     "",
     "**内容:**",
     fencedBlock(fb.content),
