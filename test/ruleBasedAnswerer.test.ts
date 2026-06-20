@@ -85,6 +85,14 @@ test("文明: 水光カードに水文明ですかはyes", async () => {
   assert.equal(result.answer, "yes");
 });
 
+test("文明: ボルガッシュ・ドラゴン(火)に水火以外ですかはno", async () => {
+  const result = await answerer.answer(
+    card({ name: "ボルガッシュ・ドラゴン", civilization: "火" }),
+    "水火以外ですか",
+  );
+  assert.equal(result.answer, "no");
+});
+
 // --- カードタイプ (否定形) -----------------------------------------------
 // Regression: Issue #20 - 嘆きの影ダーク・レイブン への否定形質問が正しく回答されなかった
 
