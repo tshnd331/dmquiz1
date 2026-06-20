@@ -70,8 +70,12 @@ export class RuleBasedQuestionAnswerer implements QuestionAnswerer {
     // just Water. Using only the first match caused false "yes" answers for
     // multi-civ cards (e.g. "水光" answering yes to "水自然ですか").
     const allMatched = civs.filter((c) => c.words.some((w) => q.includes(normalize(w))));
-    const has = allMatched.every((c) => card.civilization!.includes(c.key));
-    return verdict(isTrailingNegation(q) ? !has : has, `文明は「${card.civilization}」です。`);
+    const hasAll = allMatched.every((c) => card.civilization!.includes(c.key));
+    if (isTrailingExcept(q)) {
+      const hasAny = allMatched.some((c) => card.civilization!.includes(c.key));
+      return verdict(!hasAny, `文明は「${card.civilization}」です。`);
+    }
+    return verdict(isTrailingNegation(q) ? !hasAll : hasAll, `文明は「${card.civilization}」です。`);
   }
 
   // --- カードタイプ -----------------------------------------------------
@@ -226,6 +230,10 @@ function extractKeyword(q: string): string | null {
 
 function isTrailingNegation(q: string): boolean {
   return TRAILING_NEGATION_PATTERN.test(q);
+}
+
+function isTrailingExcept(q: string): boolean {
+  return /以外(ですか)?[?？。、.,!！]*$/.test(q);
 }
 
 export type { YesNoUnknown };
