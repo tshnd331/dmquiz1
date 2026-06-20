@@ -103,15 +103,12 @@ export class RuleBasedQuestionAnswerer implements QuestionAnswerer {
         return unknown("コスト情報が未取得です。");
       }
 
-      if (labeledPower !== null) {
-        const power = parsePower(card.power);
-        if (power === null) {
-          return unknown("パワー情報が未取得、または数値化できません。");
-        }
+      const parsedPower = labeledPower === null ? null : parsePower(card.power);
+      if (labeledPower !== null && parsedPower === null) {
+        return unknown("パワー情報が未取得、または数値化できません。");
       }
 
       const passesCost = labeledCost === null ? true : card.cost === labeledCost;
-      const parsedPower = labeledPower === null ? null : parsePower(card.power);
       const passesPower = labeledPower === null ? true : parsedPower === labeledPower;
       const combined = hasAll && passesType && passesCost && passesPower;
 
