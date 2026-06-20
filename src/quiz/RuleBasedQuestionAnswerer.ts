@@ -99,7 +99,7 @@ export class RuleBasedQuestionAnswerer implements QuestionAnswerer {
       const labeledCost = extractLabeledNumber(q, "コスト");
       const labeledPower = extractLabeledNumber(q, "パワー");
 
-      if (labeledCost !== null && (card.cost === null || card.cost === undefined)) {
+      if (labeledCost !== null && card.cost == null) {
         return unknown("コスト情報が未取得です。");
       }
 
@@ -245,8 +245,13 @@ function extractNumber(s: string): number | null {
 }
 
 function extractLabeledNumber(s: string, label: string): number | null {
-  const m = s.match(new RegExp(`${label}(?:は|が|:|：)?(-?\\d+)`));
+  const escapedLabel = escapeRegExp(label);
+  const m = s.match(new RegExp(`${escapedLabel}(?:は|が|:|：)?(-?\\d+)`));
   return m ? parseInt(m[1], 10) : null;
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 /**
