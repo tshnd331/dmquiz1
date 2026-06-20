@@ -200,6 +200,40 @@ test("カードタイプ: 進化クリーチャーではないですか - 進化
   assert.equal(result.answer, "no");
 });
 
+// Regression: Issue #29 - 文明とカードタイプを同時に尋ねる質問が
+// 文明だけで誤って yes 判定されることがあった
+test("文明+カードタイプ: 自然の呪文ですか - 自然のクリーチャーはno", async () => {
+  const result = await answerer.answer(
+    card({ civilization: "自然", cardType: "クリーチャー" }),
+    "自然の呪文ですか？",
+  );
+  assert.equal(result.answer, "no");
+});
+
+test("文明+カードタイプ: 自然の呪文ですか - 自然の呪文はyes", async () => {
+  const result = await answerer.answer(
+    card({ civilization: "自然", cardType: "呪文" }),
+    "自然の呪文ですか？",
+  );
+  assert.equal(result.answer, "yes");
+});
+
+test("文明+カードタイプ: 自然の呪文ではないですか - 自然のクリーチャーはyes", async () => {
+  const result = await answerer.answer(
+    card({ civilization: "自然", cardType: "クリーチャー" }),
+    "自然の呪文ではないですか？",
+  );
+  assert.equal(result.answer, "yes");
+});
+
+test("文明+カードタイプ: 自然の呪文ではないですか - 自然の呪文はno", async () => {
+  const result = await answerer.answer(
+    card({ civilization: "自然", cardType: "呪文" }),
+    "自然の呪文ではないですか？",
+  );
+  assert.equal(result.answer, "no");
+});
+
 // --- コスト / パワー / 種族 (否定形) --------------------------------------
 // Regression: Issue #22 - 墓堀怪人アシッドフィスト への否定形質問が
 // カードタイプ以外で正しく判定されなかった

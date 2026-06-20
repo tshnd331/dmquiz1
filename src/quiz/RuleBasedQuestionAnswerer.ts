@@ -71,6 +71,21 @@ export class RuleBasedQuestionAnswerer implements QuestionAnswerer {
     // multi-civ cards (e.g. "水光" answering yes to "水自然ですか").
     const allMatched = civs.filter((c) => c.words.some((w) => q.includes(normalize(w))));
     const hasAll = allMatched.every((c) => card.civilization!.includes(c.key));
+    const matchedType = CARD_TYPES.find((t) => q.includes(normalize(t)));
+
+    if (matchedType) {
+      if (!card.cardType) {
+        return unknown("カードタイプ情報が未取得です。");
+      }
+      const normalizedMatchedType = normalize(matchedType);
+      const hasType = normalize(card.cardType).includes(normalizedMatchedType);
+      const combined = hasAll && hasType;
+      return verdict(
+        isTrailingNegation(q) ? !combined : combined,
+        `文明は「${card.civilization}」、カードタイプは「${card.cardType}」です。`,
+      );
+    }
+
     if (isTrailingExcept(q)) {
       const hasAny = allMatched.some((c) => card.civilization!.includes(c.key));
       return verdict(!hasAny, `文明は「${card.civilization}」です。`);
@@ -83,8 +98,7 @@ export class RuleBasedQuestionAnswerer implements QuestionAnswerer {
     // Order matters: more specific subtypes must come before broader ones so
     // that `find` (first match wins) and the negation check below apply to the
     // intended type (e.g. "進化クリーチャー" before "クリーチャー").
-    const types = ["進化クリーチャー", "クリーチャー", "呪文", "進化", "クロスギア", "城", "フィールド", "タマシード"];
-    const matched = types.find((t) => q.includes(normalize(t)));
+    const matched = CARD_TYPES.find((t) => q.includes(normalize(t)));
     if (!matched) return null;
 
     const haystack = `${card.cardType ?? ""}`;
@@ -173,6 +187,16 @@ function unknown(reason: string): AnswerResult {
 }
 
 const TRAILING_NEGATION_PATTERN = /(ではない|じゃない|以外)(ですか)?[?？。、.,!！]*$/;
+const CARD_TYPES = [
+  "進化クリーチャー",
+  "クリーチャー",
+  "呪文",
+  "進化",
+  "クロスギア",
+  "城",
+  "フィールド",
+  "タマシード",
+];
 /** Lowercase, trim, normalise full-width chars, drop spaces/punctuation noise. */
 function normalize(s: string): string {
   return s
