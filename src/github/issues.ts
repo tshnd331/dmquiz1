@@ -36,16 +36,19 @@ function fencedBlock(s: string): string {
 }
 
 /** Short, human-readable Issue title for a feedback item. */
-export function buildFeedbackIssueTitle(fb: QuestionFeedback, cardName: string): string {
+export function buildFeedbackIssueTitle(
+  fb: QuestionFeedback,
+  cardName: string | null,
+): string {
   const clean = sanitizeTitlePart(fb.content);
   const q = clean.length > 60 ? clean.slice(0, 59) + "…" : clean;
-  return `[feedback] ${cardName}: ${q}`;
+  return `[feedback] ${cardName ?? "(カード指定なし)"}: ${q}`;
 }
 
 /** Markdown body for the Issue created on admin approval. */
 export function buildFeedbackIssueBody(
   fb: QuestionFeedback,
-  cardName: string,
+  cardName: string | null,
   adminComment?: string | null,
 ): string {
   const lines = [
@@ -54,7 +57,7 @@ export function buildFeedbackIssueBody(
     "**内容:**",
     fencedBlock(fb.content),
     "",
-    `**カード名:** ${cardName}`,
+    `**カード名:** ${cardName ?? "(カード指定なし)"}`,
     "",
     `**ユーザー ID:** ${fb.userId}`,
   ];

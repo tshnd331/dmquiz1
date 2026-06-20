@@ -36,11 +36,11 @@ export const commands = [
 
   new SlashCommandBuilder()
     .setName("dmquiz_feedback")
-    .setDescription("進行中クイズのBot回答が誤っていた場合に報告します（管理者確認後に対応）")
+    .setDescription("Botの回答誤り等を報告します（進行中クイズがあれば対象カードに自動紐付け／管理者確認後に対応）")
     .addStringOption((opt) =>
       opt
         .setName("content")
-        .setDescription("どの質問でBotの回答が誤っていたか・本来の正解・理由を自由に記入")
+        .setDescription("Botの回答が誤っていた点・本来の正解・理由などを自由に記入")
         .setRequired(true),
     ),
 ].map((c) => c.toJSON());
