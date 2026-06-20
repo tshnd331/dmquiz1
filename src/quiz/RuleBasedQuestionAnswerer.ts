@@ -108,8 +108,10 @@ export class RuleBasedQuestionAnswerer implements QuestionAnswerer {
         return unknown("パワー情報が未取得、または数値化できません。");
       }
 
-      const passesCost = labeledCost === null ? true : card.cost === labeledCost;
-      const passesPower = labeledPower === null ? true : parsedPower === labeledPower;
+      const passesCost =
+        labeledCost === null ? true : compareByOp(card.cost!, labeledCost.value, labeledCost.op);
+      const passesPower =
+        labeledPower === null ? true : compareByOp(parsedPower!, labeledPower.value, labeledPower.op);
       const combined = hasAll && passesType && passesCost && passesPower;
 
       return verdict(
@@ -156,13 +158,8 @@ export class RuleBasedQuestionAnswerer implements QuestionAnswerer {
       return unknown("コスト情報が未取得です。");
     }
 
-    let has: boolean;
-    if (q.includes("以上")) has = card.cost >= num;
-    else if (q.includes("以下")) has = card.cost <= num;
-    else if (q.includes("より大き") || q.includes("超え")) has = card.cost > num;
-    else if (q.includes("未満") || q.includes("より小さ")) has = card.cost < num;
-    else has = card.cost === num;
     // default: exact match ("コストは5ですか")
+    const has = compareByOp(card.cost, num, operatorOf(q));
     return verdict(isTrailingNegation(q) ? !has : has, `コストは ${card.cost} です。`);
   }
 
@@ -176,12 +173,7 @@ export class RuleBasedQuestionAnswerer implements QuestionAnswerer {
       return unknown("パワー情報が未取得、または数値化できません。");
     }
 
-    let has: boolean;
-    if (q.includes("以上")) has = power >= num;
-    else if (q.includes("以下")) has = power <= num;
-    else if (q.includes("より大き") || q.includes("超え")) has = power > num;
-    else if (q.includes("未満") || q.includes("より小さ")) has = power < num;
-    else has = power === num;
+    const has = compareByOp(power, num, operatorOf(q));
     return verdict(isTrailingNegation(q) ? !has : has, `パワーは ${card.power} です。`);
   }
 
@@ -244,10 +236,63 @@ function extractNumber(s: string): number | null {
   return m ? parseInt(m[0], 10) : null;
 }
 
-function extractLabeledNumber(s: string, label: string): number | null {
+type CompareOp = "gte" | "lte" | "gt" | "lt" | "eq";
+type LabeledConstraint = { value: number; op: CompareOp };
+
+/**
+ * Extract a labeled number and its comparison operator (以上/以下/未満/超え/...).
+ * Returns null when the label+number is not present. The operator token is read
+ * from immediately after the number so that combined questions can carry a
+ * different operator per label (e.g. "コスト10以上のパワー2000以下").
+ */
+function extractLabeledNumber(s: string, label: string): LabeledConstraint | null {
   const escapedLabel = escapeRegExp(label);
-  const m = s.match(new RegExp(`${escapedLabel}(?:は|が|:|：)?(-?\\d+)`));
-  return m ? parseInt(m[1], 10) : null;
+  const m = s.match(
+    new RegExp(`${escapedLabel}(?:は|が|:|：)?(-?\\d+)(以上|以下|未満|より小さ|より大き|超え)?`),
+  );
+  if (!m) return null;
+  return { value: parseInt(m[1], 10), op: toCompareOp(m[2]) };
+}
+
+function toCompareOp(token: string | undefined): CompareOp {
+  switch (token) {
+    case "以上":
+      return "gte";
+    case "以下":
+      return "lte";
+    case "より大き":
+    case "超え":
+      return "gt";
+    case "未満":
+    case "より小さ":
+      return "lt";
+    default:
+      return "eq";
+  }
+}
+
+/** Detect a comparison operator anywhere in the question (single-constraint use). */
+function operatorOf(q: string): CompareOp {
+  if (q.includes("以上")) return "gte";
+  if (q.includes("以下")) return "lte";
+  if (q.includes("より大き") || q.includes("超え")) return "gt";
+  if (q.includes("未満") || q.includes("より小さ")) return "lt";
+  return "eq";
+}
+
+function compareByOp(actual: number, expected: number, op: CompareOp): boolean {
+  switch (op) {
+    case "gte":
+      return actual >= expected;
+    case "lte":
+      return actual <= expected;
+    case "gt":
+      return actual > expected;
+    case "lt":
+      return actual < expected;
+    default:
+      return actual === expected;
+  }
 }
 
 function escapeRegExp(s: string): string {
