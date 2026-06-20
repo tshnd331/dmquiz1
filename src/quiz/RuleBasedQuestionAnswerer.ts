@@ -179,6 +179,16 @@ export class RuleBasedQuestionAnswerer implements QuestionAnswerer {
 
   // --- 種族 / テキスト --------------------------------------------------
   private tryRaceOrText(card: Card, q: string): AnswerResult | null {
+    if (isRaceCountQuestion(q)) {
+      if (!card.race) return unknown("このカードの種族情報が未取得です。");
+      const raceCount = countRaces(card.race);
+      const hasMultipleRaces = raceCount >= 2;
+      return verdict(
+        isTrailingNegation(q) ? !hasMultipleRaces : hasMultipleRaces,
+        `種族は「${card.race}」です。`,
+      );
+    }
+
     // Pattern: "〜ですか" / "〜を持っていますか" — strip the suffix and search.
     const keyword = extractKeyword(q);
     if (!keyword) return null;
@@ -346,6 +356,18 @@ function isTrailingNegation(q: string): boolean {
 
 function isTrailingExcept(q: string): boolean {
   return /以外(ですか)?[?？。、.,!！]*$/.test(q);
+}
+
+function isRaceCountQuestion(q: string): boolean {
+  if (!q.includes("種族")) return false;
+  return /((ふたつ|二つ|2つ|２つ|2|２)以上|複数)/.test(q);
+}
+
+function countRaces(race: string): number {
+  return race
+    .split(/[\/／]/)
+    .map((part) => part.trim())
+    .filter(Boolean).length;
 }
 
 export type { YesNoUnknown };
