@@ -76,7 +76,10 @@ export class RuleBasedQuestionAnswerer implements QuestionAnswerer {
 
   // --- カードタイプ -----------------------------------------------------
   private tryCardType(card: Card, q: string): AnswerResult | null {
-    const types = ["クリーチャー", "呪文", "進化", "クロスギア", "城", "フィールド", "タマシード"];
+    // Order matters: more specific subtypes must come before broader ones so
+    // that `find` (first match wins) and the negation check below apply to the
+    // intended type (e.g. "進化クリーチャー" before "クリーチャー").
+    const types = ["進化クリーチャー", "クリーチャー", "呪文", "進化", "クロスギア", "城", "フィールド", "タマシード"];
     const matched = types.find((t) => q.includes(normalize(t)));
     if (!matched) return null;
 

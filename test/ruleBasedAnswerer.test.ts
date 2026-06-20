@@ -135,3 +135,52 @@ test("カードタイプ: クリーチャーではないカードタイプです
   );
   assert.equal(result.answer, "yes");
 });
+
+test("カードタイプ: クリーチャーじゃないですか - クリーチャーカードはno", async () => {
+  const result = await answerer.answer(
+    card({ cardType: "クリーチャー" }),
+    "クリーチャーじゃないですか？",
+  );
+  assert.equal(result.answer, "no");
+});
+
+test("カードタイプ: クリーチャーじゃないですか - 呪文カードはyes", async () => {
+  const result = await answerer.answer(
+    card({ cardType: "呪文" }),
+    "クリーチャーじゃないですか？",
+  );
+  assert.equal(result.answer, "yes");
+});
+
+test("カードタイプ: クリーチャーではなく呪文ですか - クリーチャーカードはno", async () => {
+  const result = await answerer.answer(
+    card({ cardType: "クリーチャー" }),
+    "クリーチャーではなく呪文ですか？",
+  );
+  assert.equal(result.answer, "no");
+});
+
+test("カードタイプ: クリーチャーではなく呪文ですか - 呪文カードはyes", async () => {
+  const result = await answerer.answer(
+    card({ cardType: "呪文" }),
+    "クリーチャーではなく呪文ですか？",
+  );
+  assert.equal(result.answer, "yes");
+});
+
+// 指摘1回帰防止: サブタイプ「進化クリーチャー」が「クリーチャー」に誤マッチしないこと
+test("カードタイプ: 進化クリーチャーではないですか - 通常クリーチャーはyes", async () => {
+  const result = await answerer.answer(
+    card({ cardType: "クリーチャー" }),
+    "進化クリーチャーではないですか？",
+  );
+  assert.equal(result.answer, "yes");
+});
+
+test("カードタイプ: 進化クリーチャーではないですか - 進化クリーチャーはno", async () => {
+  const result = await answerer.answer(
+    card({ cardType: "進化クリーチャー" }),
+    "進化クリーチャーではないですか？",
+  );
+  assert.equal(result.answer, "no");
+});
