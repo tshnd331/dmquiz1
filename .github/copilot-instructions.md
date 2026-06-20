@@ -4,6 +4,7 @@
 
 ## PR ルール（最重要）
 
+- **AI が生成する文章（PR 本文 / PR タイトル / コミットメッセージ / レビューコメント / Issue コメントなど）はすべて日本語で書く。**
 - **アサインされた Issue を解決する PR では、PR 本文（description）に必ず `Closes #<その Issue 番号>` を記載する。** main へのマージ時に元 Issue が自動 close されるようにするため。
 - **自動マージはしない。** 人間レビュー必須（branch protection）。
 

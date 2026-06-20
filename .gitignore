@@ -6,3 +6,4 @@ dist/
 prisma/dev.db
 prisma/migrations/dev.db
 .DS_Store
+.claude
