@@ -71,7 +71,7 @@ export class RuleBasedQuestionAnswerer implements QuestionAnswerer {
     // multi-civ cards (e.g. "水光" answering yes to "水自然ですか").
     const allMatched = civs.filter((c) => c.words.some((w) => q.includes(normalize(w))));
     const has = allMatched.every((c) => card.civilization!.includes(c.key));
-    return verdict(has, `文明は「${card.civilization}」です。`);
+    return verdict(isTrailingNegation(q) ? !has : has, `文明は「${card.civilization}」です。`);
   }
 
   // --- カードタイプ -----------------------------------------------------
@@ -106,14 +106,14 @@ export class RuleBasedQuestionAnswerer implements QuestionAnswerer {
       return unknown("コスト情報が未取得です。");
     }
 
-    if (q.includes("以上")) return verdict(card.cost >= num, `コストは ${card.cost} です。`);
-    if (q.includes("以下")) return verdict(card.cost <= num, `コストは ${card.cost} です。`);
-    if (q.includes("より大き") || q.includes("超え"))
-      return verdict(card.cost > num, `コストは ${card.cost} です。`);
-    if (q.includes("未満") || q.includes("より小さ"))
-      return verdict(card.cost < num, `コストは ${card.cost} です。`);
+    let has: boolean;
+    if (q.includes("以上")) has = card.cost >= num;
+    else if (q.includes("以下")) has = card.cost <= num;
+    else if (q.includes("より大き") || q.includes("超え")) has = card.cost > num;
+    else if (q.includes("未満") || q.includes("より小さ")) has = card.cost < num;
+    else has = card.cost === num;
     // default: exact match ("コストは5ですか")
-    return verdict(card.cost === num, `コストは ${card.cost} です。`);
+    return verdict(isTrailingNegation(q) ? !has : has, `コストは ${card.cost} です。`);
   }
 
   // --- パワー -----------------------------------------------------------
@@ -126,13 +126,13 @@ export class RuleBasedQuestionAnswerer implements QuestionAnswerer {
       return unknown("パワー情報が未取得、または数値化できません。");
     }
 
-    if (q.includes("以上")) return verdict(power >= num, `パワーは ${card.power} です。`);
-    if (q.includes("以下")) return verdict(power <= num, `パワーは ${card.power} です。`);
-    if (q.includes("より大き") || q.includes("超え"))
-      return verdict(power > num, `パワーは ${card.power} です。`);
-    if (q.includes("未満") || q.includes("より小さ"))
-      return verdict(power < num, `パワーは ${card.power} です。`);
-    return verdict(power === num, `パワーは ${card.power} です。`);
+    let has: boolean;
+    if (q.includes("以上")) has = power >= num;
+    else if (q.includes("以下")) has = power <= num;
+    else if (q.includes("より大き") || q.includes("超え")) has = power > num;
+    else if (q.includes("未満") || q.includes("より小さ")) has = power < num;
+    else has = power === num;
+    return verdict(isTrailingNegation(q) ? !has : has, `パワーは ${card.power} です。`);
   }
 
   // --- 種族 / テキスト --------------------------------------------------
@@ -142,23 +142,18 @@ export class RuleBasedQuestionAnswerer implements QuestionAnswerer {
     if (!keyword) return null;
 
     const raceHit = card.race ? normalize(card.race).includes(keyword) : false;
-    if (card.race && raceHit) {
-      return verdict(true, `種族は「${card.race}」です。`);
-    }
-
-    // If race is known but does not contain the keyword, we can answer "no"
-    // for race-style questions; otherwise fall back to text search.
     const textHaystack = normalize(`${card.text ?? ""} ${card.rawText ?? ""}`);
-    if (keyword && textHaystack) {
-      const has = textHaystack.includes(keyword);
-      if (has) return verdict(true, "能力テキストに該当する記述があります。");
-    }
+    const textHit = keyword && textHaystack ? textHaystack.includes(keyword) : false;
+    const negated = isTrailingNegation(q);
 
+    if (card.race && raceHit) {
+      return verdict(negated ? false : true, `種族は「${card.race}」です。`);
+    }
+    if (textHit) return verdict(negated ? false : true, "能力テキストに該当する記述があります。");
     if (card.race) {
       // Known race, keyword not present anywhere -> no.
-      return verdict(false, `種族は「${card.race}」です。`);
+      return verdict(negated ? true : false, `種族は「${card.race}」です。`);
     }
-
     return null;
   }
 }
@@ -219,12 +214,17 @@ function extractKeyword(q: string): string | null {
     .replace(/それは?/g, "")
     .replace(/を?持っていますか.*$/g, "")
     .replace(/を?持つ.*$/g, "")
+    .replace(/(ではない|じゃない|以外)ですか.*$/g, "")
     .replace(/ですか.*$/g, "")
     .replace(/[?？。、.,!！]/g, "")
     .trim();
   // Too short or generic to be meaningful.
   if (k.length < 2) return null;
   return k;
+}
+
+function isTrailingNegation(q: string): boolean {
+  return /(ではない|じゃない|以外)ですか[?？]*$/.test(q) || /(ではない|じゃない|以外)[?？]*$/.test(q);
 }
 
 export type { YesNoUnknown };

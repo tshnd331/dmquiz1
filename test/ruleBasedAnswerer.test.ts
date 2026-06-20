@@ -85,6 +85,14 @@ test("文明: 水光カードに水文明ですかはyes", async () => {
   assert.equal(result.answer, "yes");
 });
 
+test("文明: 墓堀怪人アシッドフィストに闇文明ではないですかはno", async () => {
+  const result = await answerer.answer(
+    card({ name: "墓堀怪人アシッドフィスト", civilization: "闇" }),
+    "闇文明ではないですか？",
+  );
+  assert.equal(result.answer, "no");
+});
+
 // --- カードタイプ (否定形) -----------------------------------------------
 // Regression: Issue #20 - 嘆きの影ダーク・レイブン への否定形質問が正しく回答されなかった
 
@@ -183,4 +191,48 @@ test("カードタイプ: 進化クリーチャーではないですか - 進化
     "進化クリーチャーではないですか？",
   );
   assert.equal(result.answer, "no");
+});
+
+// --- コスト / パワー / 種族 (否定形) --------------------------------------
+// Regression: Issue #22 - 墓堀怪人アシッドフィスト への否定形質問が
+// カードタイプ以外で正しく判定されなかった
+
+test("コスト: 墓堀怪人アシッドフィストにコスト5ではないですかはyes", async () => {
+  const result = await answerer.answer(
+    card({ name: "墓堀怪人アシッドフィスト", cost: 4 }),
+    "コスト5ではないですか？",
+  );
+  assert.equal(result.answer, "yes");
+});
+
+test("コスト: 墓堀怪人アシッドフィストにコスト4ではないですかはno", async () => {
+  const result = await answerer.answer(
+    card({ name: "墓堀怪人アシッドフィスト", cost: 4 }),
+    "コスト4ではないですか？",
+  );
+  assert.equal(result.answer, "no");
+});
+
+test("パワー: 墓堀怪人アシッドフィストにパワー4000ではないですかはyes", async () => {
+  const result = await answerer.answer(
+    card({ name: "墓堀怪人アシッドフィスト", power: "3000" }),
+    "パワー4000ではないですか？",
+  );
+  assert.equal(result.answer, "yes");
+});
+
+test("種族: 墓堀怪人アシッドフィストにデビルマスクではないですかはno", async () => {
+  const result = await answerer.answer(
+    card({ name: "墓堀怪人アシッドフィスト", race: "デビルマスク" }),
+    "デビルマスクではないですか？",
+  );
+  assert.equal(result.answer, "no");
+});
+
+test("種族: 墓堀怪人アシッドフィストにアーマロイドではないですかはyes", async () => {
+  const result = await answerer.answer(
+    card({ name: "墓堀怪人アシッドフィスト", race: "デビルマスク" }),
+    "アーマロイドではないですか？",
+  );
+  assert.equal(result.answer, "yes");
 });
