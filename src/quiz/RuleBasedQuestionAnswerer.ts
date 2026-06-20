@@ -96,7 +96,24 @@ export class RuleBasedQuestionAnswerer implements QuestionAnswerer {
       const hasExcludedType = excludedType ? normalizedCardType.includes(normalize(excludedType)) : false;
 
       const passesType = idxNot === -1 ? hasTargetType : hasTargetType && !hasExcludedType;
-      const combined = hasAll && passesType;
+      const labeledCost = extractLabeledNumber(q, "コスト");
+      const labeledPower = extractLabeledNumber(q, "パワー");
+
+      if (labeledCost !== null && (card.cost === null || card.cost === undefined)) {
+        return unknown("コスト情報が未取得です。");
+      }
+
+      if (labeledPower !== null) {
+        const power = parsePower(card.power);
+        if (power === null) {
+          return unknown("パワー情報が未取得、または数値化できません。");
+        }
+      }
+
+      const passesCost = labeledCost === null ? true : card.cost === labeledCost;
+      const parsedPower = labeledPower === null ? null : parsePower(card.power);
+      const passesPower = labeledPower === null ? true : parsedPower === labeledPower;
+      const combined = hasAll && passesType && passesCost && passesPower;
 
       return verdict(
         isTrailingNegation(q) ? !combined : combined,
@@ -228,6 +245,11 @@ function normalize(s: string): string {
 function extractNumber(s: string): number | null {
   const m = s.match(/-?\d+/);
   return m ? parseInt(m[0], 10) : null;
+}
+
+function extractLabeledNumber(s: string, label: string): number | null {
+  const m = s.match(new RegExp(`${label}(?:は|が|:|：)?(-?\\d+)`));
+  return m ? parseInt(m[1], 10) : null;
 }
 
 /**
